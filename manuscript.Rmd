@@ -1,108 +1,125 @@
 ---
-title: "Immunologic Landscape of MB"
+title: "Immunological Landscape of MB"
 output:
-  html_notebook: default
-  word_document: default
   html_document:
     df_print: paged
+  html_notebook: default
+  word_document: default
   pdf_document: default
 ---
 
-
-
 ```{r setup, include=FALSE,message=FALSE,warning=FALSE,echo=FALSE}
-knitr::opts_chunk$set(
-  comment = '', dev = c('pdf', 'tiff'),fig.width = 12,fig.height = 8)
-library(tidyverse)
+library(readxl)
 library(data.table)
 library(pheatmap)
-library(ComplexHeatmap)
 library(rstatix)
 library(circlize)
 library(gprofiler2)
 library(ggpubr)
 library(circlize)
+library(Seurat)
+library(tidyverse)
+library(ComplexHeatmap)
+library(UpSetR)
+theme_set(
+  theme_classic(base_size=25)
+)
 ```
 
 ### Outline
 
 - Fig.1 Mutation Burden
   - Fig. 1a All Variations, SNV+Indel+Fusionn
-    - Fig. 1b SNV
-    - Fig. 1c Indel
-    - Fig. 1d Fusion
-  - ~~Fig. 1e Top3 Frequent Mutations and Validated Mutations from literatures~~
-- ~~Table 1 Count of Most Frequent/ Validated Mutations~~
+    - Fig. 1b SNVs
+    - Fig. 1c Indels
+    - Fig. 1d Fusions
 - Fig. 2 Neoantigen Count
-  - ~~Fig. 2a Neoantigen of MHC-I + II (optional, overlapped transcripts between I and II restricted)~~
     - Fig 2a MHC-I Neoantigens
       - Fig 2b MHC-I SNV/Indel/Fusion Neoantigens Breakdown
     - Fig. 2c  MHC-II Neoantigens
       - Fig. 2d MHC-I SNV/Indel/Fusion Neoantigens Breakdown
-  - ~~Fig. 2e Neoantigen counts of Driver/Validated Mutations~~
   - Fig. S2 Fusions Visualization
-- Table 1 Immunegenecity Rate of all patients neoantigens
-- Table 2 Immunegenecity Rate of neoantigens by subgroups
-- Table 3 Top3 Frequent Mutations and Validated Mutations pre/post pMHC
-- Table 4a Most Frequent Mutations Print
-- Table 4b Grp3/4 Mutations Print
-- Fig. 3 Oncoprint
+      -Fig. S2a Potentially targetable Fusions
+      -Fig. S2b pMHC-I Fusion Complex
+      -Fig. S2c pMHC-II Fusion Complex
+  -Table s1 Immunogenic Fusion Cytogenetics
+  -Table s2 Percentage of Patients have at least 1 neoantigen
+  -Table s3 Percentage of Patients have at least 1 neoantigen by subgroups
+- Table s4 Immunogenecity of validated mutations
+- Table s5 Top3 Frequent Mutations and Validated Mutations pre/post pMHC
+- Table s6 Recurrent Group3/4 Neoantigens
+- Table s7 Most Frequent Mutations Print
+- Table s8 Grp3/4 Mutations Print
+- Fig. 3 Oncoprint of Neoantigens
   - Fig. 3a Oncoprint of Frequent Mutations
-  - Fig. 3b Oncoprint of Grp 3/4 Frequent Mutations
-  - Fig. 3c Oncoprint of Grp 3/4 All Mutations
-- Fig. 4 TAA
-  -  Fig. 4a Protentially Targetable TAA
-  -  ~~Fig. 4b pMHC of TAA~~
-  - Fig. 4b pMHC I 
-  - Fig. 4c pMHC II
-  - Fig. 4d Heatmap of TAA/Fetal Cerebellum/Tesis/All Normal Tissues w pathway enrichment
-  - Fig. s4 Interactive Pathway Enrichment of TAA / in html format
-- Table 5 Immunegenecity Rate of all patients TAA
-- Table 6 Immunegenecity Rate of TAA by subgroups
-- Table 7 Top3 Frequent TAA pre/post pMHC
+  - Fig. s3b Oncoprint of Grp 3/4 Frequent Mutations
+  - Fig. s3c Oncoprint of Grp 3/4 All Mutations
+- Fig. 4 TAA 
+  -  Fig. 4a Potentially Targetable TAA
+  - Fig. 4b pMHC I TAA 
+  - Fig. 4c pMHC II TAA
+  - Fig. 4d Heatmap of TAA/Fetal Cerebellum/Tesis/All Normal Tissues
+  - Fig. 4e Single Cell RNAseq by subgroups
+  - Fig. s4a Single Cell RNaseq by samples
+  - Fig. s4b Top 3 Abundant TAA on sigle cells splitted by subgroups
+  - Fig. s4c All TAA on single cells splitted by subgroups
+  - Fig. 4e Immunogenic TAAs on Single Cells
+  - Table s9 TAA Coverage on Single Cells
+  - Fig. s4d Interactive Pathway Enrichment of TAA / in html format
+  - Fig. s4e MB Cancer Testis Antigens  
+  - Table s10 Published CTA in MB
+- Table s11 Immunogenecity Rate of all patients TAA
+- Table s12 Immunogenecity Rate of TAA by subgroups
+- Table s13 Top3 Frequent TAA pre/post pMHC
 - Fig. 5 Concordance of Genomics and Proteomics 
-- Fig. 6 MB Immunological Landscape (MA) 
- - Fig. 6a Antigen presentation/processing pathway
- - ~~ Fig. 6b MB Cibersortx scRNASeq Immune deconvolution~~
- - ~~Fig. 6c MB Inhibitory and Activating Ligand-Receptor Expression~~
- - ~~Fig. 6d B7H3 gene exression by all/subgroups~~
+- Fig. 6 MB Immunological Landscape 
+ - Fig. 6a Antigen presentation/processing pathway Group3 vs The Rest
+ - Fig. 6b Antigen presentation/processing pathway Heatmap (Microarray)
+ - Fig. s6a Antigen presentation/processing pathway Heatmap (RNAseq)
+ - Fig. 6c MB Cibersortx scRNASeq Immune deconvolution (Microarray)
 
 
-### Fig.1a Total Variations, SNV+Indel+MNV+Fusion
-
+### Data Prep 
 ```{r message=FALSE,warning=FALSE}
+require(scales)
 mut <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/count/MB_ICGC_pre.tsv") %>% unique()
 col_order <- c("WNT","SHH","Group 3","Group 4")
 meta <- fread("/blue/mitchell/changlin/MB_immune/meta/northcott2017_RNAseq_phenotype_20190212.csv") %>% arrange(factor(SUBGROUP,levels=col_order)) %>% left_join(
 survival <- fread("/blue/mitchell/changlin/MB_immune/meta/donor.PBCA-DE_survival_2019Nov.tsv"))
 meta <- meta %>% arrange(factor(SUBGROUP,levels = col_order),factor(Donor_vital_status,levels = c("Alive","Deceased","NA")),desc(factor(Donor_survival_time)))
 
-
 group_colors <- c("blue","red","gold","green4")
 #data=data.frame(table(meta$SUBGROUP))
 #my_xlab <- paste(levels(data$Var1),"\n(N=",table(meta$SUBGROUP),")",sep = "")
 fusion_pre <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/fusions/MB_fusion_list.tsv")
 fusion_pre <- fusion_pre %>% group_by(PID) %>% summarise(Transcript,N=n()) %>% ungroup() %>% dplyr::select(PID,N) %>% unique()
+```
 
-fig1a <- meta %>% left_join(mut) %>%left_join(fusion_pre) %>% mutate_all(funs(replace_na(.,0)))%>% mutate(total_moderat=SNV_moderat+Indel_moderat+MNV_moderat+N) 
+### Fig.1a Total Variations, SNV+Indel+MNV+Fusion
+```{r message=FALSE,warning=FALSE}
+fig1a <- meta %>% left_join(mut) %>%left_join(fusion_pre) 
+fig1a[is.na(fig1a)] <- 0
+fig1a <- fig1a%>% mutate(total_moderat=SNV_moderat+Indel_moderat+MNV_moderat+N) 
 fig1a$SUBGROUP <-factor(fig1a$SUBGROUP,levels = col_order)
 fig1a_p <- fig1a %>% ggplot(aes(x=SUBGROUP,y=total_moderat))+
   geom_violin(alpha=0.4,aes(fill=SUBGROUP))+
   geom_jitter(height=0,width=0.2) +
   scale_color_manual(values=group_colors)+
   scale_fill_manual(values=group_colors)+
-   theme(axis.line = element_line(size = 0.5, 
+   theme(axis.title.x = element_text(color = "black"),axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "Total Count")
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "Total Count")+scale_y_continuous(breaks = pretty_breaks(n=10))
 
-fig1a_wilcox <- fig1a %>% wilcox_test(total_moderat ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position()
-fig1a_p+stat_pvalue_manual(fig1a_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 210)
-
-
+fig1a_wilcox <- fig1a %>% wilcox_test(total_moderat ~ SUBGROUP,p.adjust.method = "BH") %>% filter(p.adj <= 0.2) %>% add_xy_position()
+fig1a_p <- fig1a_p+stat_pvalue_manual(fig1a_wilcox,label = "p.adj",tip.length = 0.01,xmin = "group1",xmax = "group2",)+stat_compare_means(method = "kruskal.test",label.y = 220)
+fig1a_stat <- fig1a %>% group_by(SUBGROUP) %>% get_summary_stats() %>% ungroup() %>% filter(str_detect(variable, "moderat"))
+fig1a_stat_fusion <- fig1a %>% group_by(SUBGROUP) %>% get_summary_stats() %>% ungroup() %>% filter(variable== "N")
+fig1a_stat_fusion$variable <- str_replace_all(fig1a_stat_fusion$variable,"N","Fusion")
+fig1a_stat <- fig1a_stat %>% rbind(fig1a_stat_fusion)
 
 ```
 
-### Fig.1b Mutation Burden: SNV
+### Fig.1b Mutation Burden: SNVs
 ```{r message=FALSE,warning=FALSE}
 
 #Mutation VCF
@@ -114,15 +131,17 @@ fig1b_p <- fig1b %>% ggplot(aes(x=SUBGROUP,y=SNV_moderat))+
   geom_jitter(height=0,width=0.2) +
   scale_color_manual(values=group_colors)+
   scale_fill_manual(values=group_colors)+
-   theme(axis.line = element_line(size = 0.5, 
+   theme(axis.title.x = element_text(color = "black"),axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "SNV")+ylim(0,100)
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "SNV")+ylim(0,220)
 
-fig1b_wilcox <- fig1b %>% wilcox_test(SNV_moderat ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position() %>% mutate(y.position=c(90,80,100))
-fig1b_p+stat_pvalue_manual(fig1b_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 100)
+fig1b_wilcox <- fig1b %>% wilcox_test(SNV_moderat ~ SUBGROUP,p.adjust.method = "BH") %>% filter(p.adj <= 0.2) %>% add_xy_position()
+fig1b_p <- fig1b_p+stat_pvalue_manual(fig1b_wilcox,label = "p.adj",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 220)
+ggsave(fig1b_p,filename = "fig1b_p.pdf",width = 8.5,height = 7,units = "in")
+fig1b_stat  <- fig1b %>% group_by(SUBGROUP) %>% get_summary_stats() %>% ungroup() %>% filter(str_detect(variable, "moderat"))
 ```
 
-### Fig.1c Mutation Burden: Indel
+### Fig.1c Mutation Burden: Indels
 ```{r message=FALSE,warning=FALSE}
 fig1c <- meta %>% left_join(mut) 
 fig1c$SUBGROUP <- factor(fig1c$SUBGROUP,levels = col_order)
@@ -131,15 +150,17 @@ fig1c_p <- fig1c %>% ggplot(aes(x=SUBGROUP,y=Indel_moderat))+
   geom_jitter(height=0,width=0.2) +
   scale_color_manual(values=group_colors)+
   scale_fill_manual(values=group_colors)+
-   theme(axis.line = element_line(size = 0.5, 
+   theme(axis.title.x = element_text(color = "black"),axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "Indel")+ylim(0,5)
-fig1c_wilcox <- fig1c %>% wilcox_test(Indel_moderat ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position() %>% mutate(y.position=c(90,80,100))
-fig1c_p+stat_pvalue_manual(fig1c_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 5)
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "Indel")+ylim(0,4)
+fig1c_wilcox <- fig1c %>% wilcox_test(Indel_moderat ~ SUBGROUP,p.adjust.method = "BH",ref.group = "Group 3") %>% filter(p.adj <= 0.2) %>% add_xy_position()
+fig1c_p <- fig1c_p+stat_compare_means(method = "kruskal.test",label.y = 4)
+
+ggsave(fig1c_p,filename = "fig1c_p.pdf",width = 8.5,height = 7,units = "in")
+
 ```
 
 ### ~~Optional: Fig.1d Mutation Burden: MNV, There are no non-synonymous MNV. Won't show~~
-
 ```{r message=FALSE,warning=FALSE,fig.show=F, eval=FALSE}
  # meta %>% left_join(mut) %>% ggplot(aes(x=factor(meta$SUBGROUP,levels = col_order),y=MNV_moderat,color=SUBGROUP,fill=SUBGROUP))+
   # geom_violin(alpha=0.4)+
@@ -151,31 +172,27 @@ fig1c_p+stat_pvalue_manual(fig1c_wilcox,label = "p.adj.signif",tip.length = 0.01
   #   linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "MNV")+ylim(0,1)
 ```
 
-
 ### Fig.1d Mutate Burden: Fusions
 ```{r message=FALSE,warning=FALSE}
-
-fig1d <- meta %>% left_join(fusion_pre) %>% mutate_all(funs(replace_na(.,0)))
+fig1d <- meta %>% left_join(fusion_pre) 
+fig1d[is.na(fig1d)] <- 0
 fig1d$SUBGROUP <- factor(fig1d$SUBGROUP,levels = col_order)
 fig1d_p <- fig1d%>% ggplot(aes(x=SUBGROUP,y=N))+
   geom_violin(alpha=0.4,aes(fill=SUBGROUP))+
   geom_jitter(height=0,width=0.2) +
   scale_color_manual(values=group_colors)+
   scale_fill_manual(values=group_colors)+
-   theme(axis.line = element_line(size = 0.5, 
+   theme(axis.title.x = element_text(color = "black"),axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
     linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "Fusion")+ylim(0,5)
-fig1d_p+stat_compare_means(method = "kruskal.test",label.y = 5)
+fig1d_p <- fig1d_p+stat_compare_means(method = "kruskal.test",label.y = 5)
+ggsave(fig1d_p,filename = "fig1d_p.pdf",width = 8.5,height = 7,units = "in")
 ```
-
 
 ### ~~Fig.1e Top3 Frequent Driver Mutations and Validated other MB Mutations (From Publications)~~
-
 ```{bash include=FALSE,warning=FALSE}
 # awk '{print "MODERATE|"$1}' /blue/mitchell/changlin/MB_immune/Neoantigen/results/ICGC_Nov2019_hg38_vcf/Query_mutation_list.txt | fgrep -f - /blue/mitchell/changlin/MB_immune/Neoantigen/results/ICGC_Nov2019_hg38_vcf/ICGC_hg38_MB.vcf | sed "s/;/\t/g" | sed "s/|/\t/g" | awk '{print $8,$12}' | sed 's/_/\t/g' | awk '{print $1,$3}' OFS="\t" | sort | uniq | sed "1i\PID\tgene_name"> /blue/mitchell/changlin/MB_immune/Neoantigen/results/ICGC_Nov2019_hg38_vcf/validated_mutations_variation.txt -->
-
 ```
-
 
 ### ~~Table 1, Count of Most Frequenct Driver Mutations and Validated Mutations~~
 ```{r message=FALSE,warning=FALSE}
@@ -186,26 +203,26 @@ validated_mut <- validated_mut %>% left_join(meta) %>% dplyr::select(PID,gene_na
 
 ```
 
+### Data Prep
 ```{r message=FALSE,warning=FALSE}
 mhc1_mut <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/count/MB_I.txt") %>% filter(source=="ICGC")
  Neo_I_SNV_Tx <- mhc1_mut   %>% filter(Variant_type=="missense",!duplicated(transcript_id),source=="ICGC") %>% group_by(PID)%>% summarise(Neo_I_SNV_Tx=n())  
   Neo_I_Indel_Tx <- mhc1_mut  %>% filter(Variant_type!="missense",!duplicated(transcript_id),source=="ICGC") %>% group_by(PID) %>% summarise(Neo_I_Indel_Tx=n())
 Neo_I_Fusion_Tx <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/fusions/MB_fusion_pMHC_sf.tsv") %>% filter(HLA=="MHC_Class_I") %>% group_by(PID) %>% filter(!duplicated(Transcript_id)) %>% summarise(Neo_I_Fusion_Tx =n()) 
-Neo_I_Tx <- Neo_I_Fusion_Tx  %>% full_join(Neo_I_SNV_Tx,by="PID")%>% full_join(Neo_I_Indel_Tx)%>%right_join(meta) %>% mutate_all(funs(replace_na(.,0))) %>% mutate(Neo_I_Tx=Neo_I_SNV_Tx+Neo_I_Indel_Tx+Neo_I_Fusion_Tx )
+Neo_I_Tx <- Neo_I_Fusion_Tx  %>% full_join(Neo_I_SNV_Tx,by="PID")%>% full_join(Neo_I_Indel_Tx)%>%right_join(meta)%>% mutate_all(funs(ifelse(is.na(.),0,.))) %>% mutate(Neo_I_Tx=Neo_I_SNV_Tx+Neo_I_Indel_Tx+Neo_I_Fusion_Tx )
+
 mhc2_mut <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/count/MB_II.txt")%>% filter(source=="ICGC")
  Neo_II_SNV_Tx <- mhc2_mut  %>% filter(Variant_type=="missense",!duplicated(transcript_id),source=="ICGC") %>% group_by(PID) %>% summarise(Neo_II_SNV_Tx=n())
   Neo_II_Indel_Tx <- mhc2_mut  %>% filter(Variant_type!="missense",!duplicated(transcript_id),source=="ICGC") %>% group_by(PID)%>% summarise(Neo_II_Indel_Tx=n())
 Neo_II_Fusion_Tx <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/fusions/MB_fusion_pMHC_sf.tsv") %>% filter(HLA=="MHC_Class_II") %>% group_by(PID) %>% filter(!duplicated(Transcript_id)) %>% summarise(Neo_II_Fusion_Tx =n()) 
-Neo_II_Tx <- Neo_II_Fusion_Tx  %>% full_join(Neo_II_SNV_Tx,by="PID")%>% full_join(Neo_II_Indel_Tx)%>%right_join(meta) %>% mutate_all(funs(replace_na(.,0))) %>% mutate(Neo_II_Tx=Neo_II_SNV_Tx+Neo_II_Indel_Tx+Neo_II_Fusion_Tx )
+Neo_II_Tx <- Neo_II_Fusion_Tx  %>% full_join(Neo_II_SNV_Tx,by="PID")%>% full_join(Neo_II_Indel_Tx)%>%right_join(meta) %>% mutate_all(funs(ifelse(is.na(.),0,.))) %>% mutate(Neo_II_Tx=Neo_II_SNV_Tx+Neo_II_Indel_Tx+Neo_II_Fusion_Tx )
 fusion_neo <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/fusions/MB_fusion_pMHC_sf.tsv") %>% separate(Gene,into = c("left_gene_name","right_gene_name"),sep = "_")
 names(fusion_neo) <- str_replace(names(fusion_neo),"Transcript_id","transcript_id")
 
 ```
 
-
 ### ~~Fig. 2a Neoantigen MHC-I + MHC-II~~
 *I and II may be overlapped*
-
 ```{r message=FALSE,warning=FALSE,fig.show=F}
  # Neo_I_Tx %>% left_join(Neo_II_Tx,by="PID") %>% transmute(PID,Neo_Tx=Neo_I_Tx+Neo_II_Tx) %>% left_join(meta)  %>% ggplot(aes(x=factor(SUBGROUP,levels = col_order),y=Neo_Tx,color=SUBGROUP,fill=SUBGROUP))+
  #  geom_violin(alpha=0.4)+
@@ -215,16 +232,11 @@ names(fusion_neo) <- str_replace(names(fusion_neo),"Transcript_id","transcript_i
  #   theme(axis.line = element_line(size = 0.5, 
  #    linetype = "solid"), panel.background = element_rect(fill = NA, 
  #    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "Neoantigen Count")+ylim(0,30)
-
  
 ```
 
-
 ### Fig.2a MHC-I Neoantigens
-
 ```{r message=FALSE,warning=FALSE}
-
-
 ## MHC-I Neoantigens
 fig2a <- Neo_I_Tx 
 fig2a$SUBGROUP <- factor(fig2a$SUBGROUP,levels=col_order)
@@ -233,32 +245,35 @@ fig2a_p <- fig2a%>% ggplot(aes(x=SUBGROUP,y=Neo_I_Tx))+
   geom_jitter(height=0,width=0.2) +
   scale_color_manual(values=group_colors)+
   scale_fill_manual(values=group_colors)+
-   theme(axis.line = element_line(size = 0.5, 
+   theme(axis.title.x = element_text(color = "black"),axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "MHC-I Neoantigen")+ylim(0,20)
-fig2a_wilcox <- fig2a %>% wilcox_test(Neo_I_Tx ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position() %>% mutate(y.position=c(19,18,20))
-fig2a_p+stat_pvalue_manual(fig2a_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 20)
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "MHC-I Neoantigen")+ylim(0,30)
+fig2a_wilcox <- fig2a %>% wilcox_test(Neo_I_Tx ~ SUBGROUP,p.adjust.method = "BH") %>% filter(p.adj <= 0.2) %>% add_xy_position()%>% arrange(group2)
+fig2a_p <- fig2a_p+stat_pvalue_manual(fig2a_wilcox,label = "p.adj",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 30)
+ggsave(fig2a_p,filename = "fig2a_p.pdf",width = 8.5,height = 7,units = "in")
+fig2a_stat <- fig2a %>% group_by(SUBGROUP) %>% get_summary_stats() %>% ungroup()%>% filter(str_detect(variable,"Neo_I_"))
 ```
 
 ### Fig.2b MHC-I SNV/Indel/Fusion Neoantigens
-
 ```{r message=FALSE,warning=FALSE}
-theme_set(
-  theme_classic()
-)
+
 fig2b <- Neo_I_Tx %>% dplyr::select(SUBGROUP,Neo_I_SNV_Tx,Neo_I_Indel_Tx,Neo_I_Fusion_Tx) %>%
   pivot_longer(!SUBGROUP,names_to="Alteration",values_to="Count") 
 fig2b$SUBGROUP <-factor(fig2b$SUBGROUP,levels = col_order) 
-fig2b$Alteration <- factor(fig2b$Alteration,levels=c("Neo_I_SNV_Tx","Neo_I_Indel_Tx","Neo_I_Fusion_Tx"))
+fig2b$Alteration <- fig2b$Alteration  %>% str_replace_all(c("Neo_I_SNV_Tx"="Neo I SNV","Neo_I_Indel_Tx"="Neo I Indel","Neo_I_Fusion_Tx"="Neo I Fusion"))
+fig2b$Alteration <- factor(fig2b$Alteration,levels=c("Neo I SNV","Neo I Indel","Neo I Fusion"))
 fig2b_p <- fig2b %>% ggplot(aes(x=SUBGROUP,y=Count))+
   geom_boxplot(varwidth = TRUE,alpha=0.8,aes(fill=Alteration),outlier.alpha = 0.1)+
-  ylim(0,10)+labs(x= "")
+  ylim(0,10)+labs(x= "")+scale_y_log10()+theme(axis.title.x = element_text(color = "black"),axis.line = element_line(size = 0.5, 
+    linetype = "solid"), panel.background = element_rect(fill = NA, 
+    linetype = "solid"), plot.background = element_rect(linetype = "solid"))
 fig2b_p
+ggsave(fig2b_p,filename = "fig2b_p.pdf",width = 8.5,height = 7,units = "in")
+
 ```
 
 ### Fig.2c MHC-II Neoantigens
 ```{r message=FALSE,warning=FALSE}
-
 fig2c <- Neo_II_Tx 
 fig2c$SUBGROUP <- factor(fig2c$SUBGROUP,levels=col_order)
 fig2c_p <- fig2c%>% ggplot(aes(x=SUBGROUP,y=Neo_II_Tx))+
@@ -268,31 +283,31 @@ fig2c_p <- fig2c%>% ggplot(aes(x=SUBGROUP,y=Neo_II_Tx))+
   scale_fill_manual(values=group_colors)+
    theme(axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "MHC-II Neoantigen")+ylim(0,20)
-fig2c_wilcox <- fig2c %>% wilcox_test(Neo_II_Tx ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position() %>% mutate(y.position=c(19,18,20))
-fig2c_p+stat_pvalue_manual(fig2c_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 20)
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "MHC-II Neoantigen")+ylim(0,42)
+fig2c_wilcox <- fig2c %>% wilcox_test(Neo_II_Tx ~ SUBGROUP,p.adjust.method = "BH") %>% filter(p.adj <= 0.2) %>% add_xy_position() 
+fig2c_p <- fig2c_p+stat_pvalue_manual(fig2c_wilcox,label = "p.adj",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 42)
 fig2c_summary <- fig2c %>% group_by(SUBGROUP) %>% get_summary_stats(Neo_II_Tx)
-
+ggsave(fig2c_p,filename = "fig2c_p.pdf",width = 8.5,height = 7,units = "in")
+fig2c_stat <- fig2c %>% group_by(SUBGROUP) %>% get_summary_stats() %>% ungroup()%>% filter(str_detect(variable,"Neo_II_"))
 ```
 
 ### Fig.2d MHC-II SNV/Indel/Fusion Neoantigens
 ```{r message=FALSE,warning=FALSE}
-theme_set(
-  theme_classic()
-)
+
 fig2d <- Neo_II_Tx %>% dplyr::select(SUBGROUP,Neo_II_SNV_Tx,Neo_II_Indel_Tx,Neo_II_Fusion_Tx) %>%
   pivot_longer(!SUBGROUP,names_to="Alteration",values_to="Count") 
 fig2d$SUBGROUP <-factor(fig2d$SUBGROUP,levels = col_order) 
-fig2d$Alteration <- factor(fig2d$Alteration,levels=c("Neo_II_SNV_Tx","Neo_II_Indel_Tx","Neo_II_Fusion_Tx"))
+fig2d$Alteration <- fig2d$Alteration  %>% str_replace_all(c("Neo_II_SNV_Tx"="Neo II SNV","Neo_II_Indel_Tx"="Neo II Indel","Neo_II_Fusion_Tx"="Neo II Fusion"))
+fig2d$Alteration <- factor(fig2d$Alteration,levels=c("Neo II SNV","Neo II Indel","Neo II Fusion"))
+
 fig2d_p <- fig2d %>% ggplot(aes(x=SUBGROUP,y=Count))+
   geom_boxplot(varwidth = TRUE,alpha=0.8,aes(fill=Alteration),outlier.alpha = 0.1)+
-  ylim(0,10)+labs(x= "")
+  ylim(0,10)+labs(x= "")+scale_y_log10()
 fig2d_p
+ggsave(fig2d_p,filename = "fig2d_p.pdf",width = 8.5,height = 7,units = "in")
 ```
 
-
 ## Fig. Supp 2 Medulloblastoma Fusion Visulization
-
 ```{r message=FALSE,warning=FALSE}
 # load("/blue/mitchell/changlin/MB_immune/Nooantigen/scripts/Fusion_vis.RData")
 # tiff("real_loc_I.tiff",width = 1600,height = 1600,res = 300)
@@ -314,24 +329,39 @@ fig2d_p
 # dev.off()
 ```
 
+## Fig. S2a Potentially targetable Fusions by by Molecular Subgroups
 
-## Fig. S2a Protentially targetable Fusions by by Molecular Subgroups
+![Fig. S2a Potentially targetable Fusions by subgroups](/blue/mitchell/changlin/MB_immune/scripts/real_loc_pre.png)
 
-![Fig. S2a Protentially targetable Fusions by subgroups](./real_loc_pre.tiff)
 
 ## Fig. S2b MHC-I restricted Immunogenic Fusions by Molecular Subgroups
 
-![Fig. S2b MHC-I restricted Immunogenic Fusions by Molecular Subgroups](./real_loc_I.tiff)
+![Fig. S2b MHC-I restricted Immunogenic Fusions by Molecular Subgroups](/blue/mitchell/changlin/MB_immune/scripts/real_loc_I.png)
 
 
 ## Fig. S2c MHC-II restricted Immunogenic Fusions by Molecular Subgroups
 
-![Fig. S2c MHC-II restricted Immunogenic Fusions by Molecular Subgroups](./real_loc_II.tiff)
+![Fig. S2c MHC-II restricted Immunogenic Fusions by Molecular Subgroups](/blue/mitchell/changlin/MB_immune/scripts/real_loc_II.png)
+
+
+### Table s1 Cytogenetics of Immunogenic Fusions
+```{r message=FALSE,warning=FALSE}
+
+# load("/blue/mitchell/changlin/MB_immune/Neoantigen/scripts/Fusion_vis.RData")
+# saveRDS(fusion_pMHC_I,"/blue/mitchell/changlin/MB_immune/data/fusion_pMHC_I.rds")
+# saveRDS(fusion_pMHC_II,"/blue/mitchell/changlin/MB_immune/data/fusion_pMHC_II.rds")
+fusion_pMHC_I <- readRDS("/blue/mitchell/changlin/MB_immune/data/fusion_pMHC_I.rds")
+fusion_pMHC_II <- readRDS("/blue/mitchell/changlin/MB_immune/data/fusion_pMHC_II.rds")
+fusion_pMHC_I$chr_left %>% table() %>% as.data.frame()%>%arrange(desc(Freq)) %>%knitr::kable()
+fusion_pMHC_II$chr_left %>% table() %>% as.data.frame()%>%arrange(desc(Freq)) %>%knitr::kable()
+```
 
 
 
 
-### Table 1a What percent of patients have at least 1 targetable neoantigen?
+
+
+### Table s2 What percent of patients have at least 1 targetable neoantigen?
 
 ```{r message=FALSE,warning=FALSE}
 
@@ -344,26 +374,24 @@ table1a <- tibble(`One+`=paste0(round((total_freq %>% filter(N>0) %>%nrow() /170
 table1a %>% knitr::kable()
 ```
 
-### Table 1b What percent of patients (by subgroup) have at least one targetable neoantigen?
+### Table s3 What percent of patients (by subgroup) have at least one targetable neoantigen?
 
 ```{r message=FALSE,warning=FALSE}
 table1b <- total_freq %>% filter(N>0) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`One+`=paste0(round(N/Freq*100,1),'%')) %>%left_join(total_freq %>% filter(N>1) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`Two+`=paste0(round(N/Freq*100,1),'%'))) %>% left_join(total_freq %>% filter(N>2) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`Three+`=paste0(round(N/Freq*100,1),'%'))) %>% arrange(factor(SUBGROUP,levels = col_order))
 table1b %>% knitr::kable()
 
-
 ```
 
-### Table 2 Immungencity of validated mutations
+### Table s4 Immunogencity of Validated Mutations
 ```{r message=FALSE,warning=FALSE}
 val_neo_mut <- mhc1_mut %>% rbind(mhc2_mut) %>% filter(source=="ICGC") 
 table2 <- validated_mut %>% group_by(SUBGROUP,gene_name) %>% summarise(Mutation_Count=n()) %>% arrange(gene_name) %>%
- left_join((val_neo_mut[val_neo_mut$gene_name %in% validated_mut$gene_name,] %>% left_join(meta) %>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique() %>%  group_by(SUBGROUP,gene_name) %>% summarise(Neoantigen_Count=n()) %>%arrange(gene_name)),by=c("SUBGROUP","gene_name")) %>% mutate_all(funs(replace_na(.,0)))
+ left_join((val_neo_mut[val_neo_mut$gene_name %in% validated_mut$gene_name,] %>% left_join(meta) %>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique() %>%  group_by(SUBGROUP,gene_name) %>% summarise(Neoantigen_Count=n()) %>%arrange(gene_name)),by=c("SUBGROUP","gene_name")) %>% mutate_all(funs(ifelse(is.na(.),0,.)))
 table2 %>% knitr::kable()
 
 ```
 
-### Table 3a Recurrent Candidate Neoantigens, span at least 3 patients (showing first 10 lines)
-
+### Table s4 Recurrent Candidate Neoantigens, span at least 3 patients (showing first 10 lines)
 ```{r message=FALSE}
 mhc1_mut$HLA_type="HLA-I" 
 mhc2_mut$HLA_type="HLA-II"
@@ -377,7 +405,9 @@ All_mut <- All_mut %>% mutate(HLA_I_SNV=ifelse(Variant_type=="missense" & HLA_ty
 # N is out of total not out of each subgroup hereby
 All_mut <- All_mut %>% mutate(ICGC_alt=paste(HLA_I_SNV,HLA_I_Indel,HLA_II_SNV,HLA_II_Indel,sep = ";")) %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name)
 
-All_mut_freq <- All_mut %>% group_by(gene_name) %>% summarise(PID,SUBGROUP,ICGC_alt,N=n()) %>% filter(N>2) 
+
+## All neo
+All_mut_freq <- All_mut %>% group_by(gene_name) %>% summarise(PID,SUBGROUP,ICGC_alt,N=n()) 
 
 MB_ICGC <- All_mut %>% dplyr::select(!SUBGROUP)%>%pivot_wider(names_from = 'PID',values_from='ICGC_alt') %>% column_to_rownames(var = "gene_name")
 MB_ICGC[is.na(MB_ICGC)]=""
@@ -389,29 +419,26 @@ table3a <- All_mut_freq %>% arrange(desc(N))
 table3a %>%head(10)%>% knitr::kable()
 ```
 
-### Table 3b Group3/4 Neoantigens (showing first 10 lines)
-
+### Table s5 Group3/4 Neoantigens (showing first 10 lines)
 ```{r message=FALSE}
 meta_grp3_4 <- meta %>% filter(str_detect(SUBGROUP,"Group"))
 grp3_4_mut <- All_mut[All_mut$PID %in% meta_grp3_4$PID,] 
 grp3_4_neo <- MB_ICGC %>% dplyr::select(grp3_4_mut$PID)
-meta_grp3_4 <- meta_grp3_4[meta_grp3_4$PID %in% grp3_4_mut$PID]
+meta_grp3_4 <- meta_grp3_4[meta_grp3_4$PID %in% grp3_4_mut$PID,]
 
 grp3_4_1_mut <- grp3_4_mut %>% group_by(gene_name) %>% summarise(PID,SUBGROUP,ICGC_alt,N=n())%>%arrange(desc(N)) %>% filter(N>0)
 grp3_4_2_mut <- grp3_4_mut %>% group_by(gene_name) %>% summarise(PID,SUBGROUP,ICGC_alt,N=n())%>%arrange(desc(N)) %>%filter(N>1)
 grp3_4_neo_1 <- grp3_4_neo[rownames(grp3_4_neo) %in% grp3_4_1_mut$gene_name,] %>% dplyr::select(meta_grp3_4$PID)
 grp3_4_neo_2 <- grp3_4_neo[rownames(grp3_4_neo) %in% grp3_4_2_mut$gene_name,]%>% dplyr::select(meta_grp3_4$PID)
 
-
-
 #Table 3b
 table3b <- grp3_4_1_mut
 table3b %>% head(10)%>% knitr::kable() 
 ```
 
-### Fig. 3a-3c Oncoprint of Recurrent Neoantigens and Group3/4 Recurrent/All Neoantigens
-Oncoprint
-```{r message=F,warning=F}
+### Fig. 3a Oncoprint of Recurrent Neoantigens and Fig. s3b-3c Group3/4 Recurrent/All Neoantigens
+### Oncoprint
+```{r fig.height=8,fig.width=18}
 col_HLA = c("HLA_I_SNV" = "blue", "HLA_I_Indel" = "orange", "HLA_II_SNV" = "red","HLA_II_Indel"="green")
 
 alter_fun = list(
@@ -441,13 +468,17 @@ alter_fun = list(
   }
 )
 
+col_age <- colorRamp2(c(0,80),c("white","brown"))
 column_title_ICGC = "ICGC Medulloblastoma Neoantigens (n=170)"
 column_title_grp3_4 = "ICGC Group3/4 Medulloblastoma Neoantigens (n=71)"
-heatmap_legend_param = list(title = "Alternations", at = c("HLA_I_SNV","HLA_I_Indel","HLA_II_SNV","HLA_II_Indel"), 
+heatmap_legend_param = list(title = "Alterations", at = c("HLA_I_SNV","HLA_I_Indel","HLA_II_SNV","HLA_II_Indel"), 
                             labels = c("HLA_I_SNV","HLA_I_Indel","HLA_II_SNV","HLA_II_Indel"))
-# ICGC All patients, Variantions span 3 or more patients
+# ICGC All patients, Variations span 3 or more patients
 ICGC_all <- oncoPrint(MB_ICGC_freq,
-          alter_fun = alter_fun, col = col_HLA, 
+          alter_fun = alter_fun, 
+          show_row_names = F,
+          show_pct = FALSE,
+          col = col_HLA, 
           column_order = meta_neo$PID,
           heatmap_legend_param=heatmap_legend_param,
           column_title = column_title_ICGC,
@@ -455,10 +486,36 @@ ICGC_all <- oncoPrint(MB_ICGC_freq,
                                              Age=meta_neo$AGE,
                                              Gender=meta_neo$GENDER,
                                              Vital_Status=meta_neo$Donor_vital_status,
-                                             Overall_Survival=anno_lines(meta_neo$Donor_survival_time,gp=gpar(frontsize=8)),
+                                          Overall_Survival=anno_lines(meta_neo$Donor_survival_time,gp=gpar(frontsize=8)),
                                                which = "col",
-                                             col=list(Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+                                             col=list(Age=col_age,Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
 )
+
+#rec neo >= 2
+All_mut_freq <- All_mut %>% group_by(gene_name) %>% summarise(PID,SUBGROUP,ICGC_alt,N=n()) %>% filter(N>1) 
+
+MB_ICGC <- All_mut %>% dplyr::select(!SUBGROUP)%>%pivot_wider(names_from = 'PID',values_from='ICGC_alt') %>% column_to_rownames(var = "gene_name")
+MB_ICGC[is.na(MB_ICGC)]=""
+meta_neo <- meta[meta$PID %in% colnames(MB_ICGC),]
+MB_ICGC_freq <- MB_ICGC[rownames(MB_ICGC) %in% All_mut_freq$gene_name,] %>% dplyr::select(meta_neo$PID)
+
+
+ICGC_all_2 <- oncoPrint(MB_ICGC_freq,
+          alter_fun = alter_fun, 
+          col = col_HLA, 
+          column_order = meta_neo$PID,
+          heatmap_legend_param=heatmap_legend_param,
+          column_title = column_title_ICGC,
+          top_annotation = HeatmapAnnotation(Subtype=meta_neo$SUBGROUP,
+                                             Age=meta_neo$AGE,
+                                             Gender=meta_neo$GENDER,
+                                             Vital_Status=meta_neo$Donor_vital_status,
+                                          Overall_Survival=anno_lines(meta_neo$Donor_survival_time,gp=gpar(frontsize=8)),
+                                               which = "col",
+                                             col=list(Age=col_age,Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+)
+
+
 
 # At least 2 neoantigens in Grp3/4
 ICGC_grp3_4_2 <- oncoPrint(grp3_4_neo_2,
@@ -472,7 +529,7 @@ ICGC_grp3_4_2 <- oncoPrint(grp3_4_neo_2,
                                              Vital_Status=meta_grp3_4$Donor_vital_status,
                                              Overall_Survival=anno_lines(meta_grp3_4$Donor_survival_time,gp=gpar(frontsize=8)),
                                                which = "col",
-                                             col=list(Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+                                             col=list(Age=col_age,Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
 )
 #At least 1 antigen in Grp3/4
 ICGC_grp3_4_1<- oncoPrint(grp3_4_neo_1,
@@ -484,20 +541,31 @@ ICGC_grp3_4_1<- oncoPrint(grp3_4_neo_1,
           show_pct = F,
           heatmap_legend_param=heatmap_legend_param,
           column_title = column_title_grp3_4,
-          top_annotation = HeatmapAnnotation(Subtype=meta_grp3_4$SUBGROUP,
+          top_annotation = HeatmapAnnotation(Age=col_age,Subtype=meta_grp3_4$SUBGROUP,
                                              Age=meta_grp3_4$AGE,
                                              Gender=meta_grp3_4$GENDER,
                                              Vital_Status=meta_grp3_4$Donor_vital_status,
-                                             Overall_Survival=anno_lines(meta_grp3_4$Donor_survival_time,gp=gpar(frontsize=8)),
+                                   Overall_Survival=anno_lines(meta_grp3_4$Donor_survival_time,gp=gpar(frontsize=8)),
                                                which = "col",
-                                             col=list(Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+                                             col=list(Age=col_age,Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
 )
-draw(ICGC_all,annotation_legend_side="bottom",heatmap_legend_side="bottom",merge_legend=T)
-draw(ICGC_grp3_4_2,annotation_legend_side="bottom",heatmap_legend_side="bottom",merge_legend=T)
-draw(ICGC_grp3_4_1,annotation_legend_side="bottom",heatmap_legend_side="bottom",merge_legend=T)
+pdf(file = "fig2e_p.pdf",width = 12,height = 6)
+draw(ICGC_all,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+dev.off()
+
+tiff(filename = "fig2e_p.tiff")
+draw(ICGC_all,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+dev.off()
+
+
+
+draw(ICGC_all_2,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+
+draw(ICGC_grp3_4_2,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+# draw(ICGC_grp3_4_1,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
 ```
 
-### Fig. 4a Protentially Targetable TAA
+### Fig. 4a Potentially Targetable TAA
 ```{r message=F,warning=F}
 TAA <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/TAA_fetal_testis.txt")
 files <- list.files(path="/blue/mitchell/changlin/MB_immune/TAA/results", pattern = "*_u_2sd.tsv",all.files=T,full.names = T)
@@ -517,19 +585,22 @@ fig4a_p <- fig4a %>% ggplot(aes(x=SUBGROUP,y=Count))+
   geom_jitter(height=0,width=0.2) +
   scale_color_manual(values=group_colors)+
   scale_fill_manual(values=group_colors)+
-   theme(axis.line = element_line(size = 0.5, 
+   theme(axis.title.x = element_text(color = "black"),axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "TAA Count")+ylim(0,50)
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "TAG Count")+ylim(0,60)
 
-fig4a_wilcox <- fig4a %>% wilcox_test(Count ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position() %>% mutate(y.position=c(46,43,48))
-fig4a_p+stat_pvalue_manual(fig4a_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 50)
-
+fig4a_wilcox <- fig4a %>% wilcox_test(Count ~ SUBGROUP,p.adjust.method = "BH") %>% filter(p.adj <= 0.2) %>% add_xy_position() 
+fig1e_p <- fig4a_p+stat_pvalue_manual(fig4a_wilcox,label = "p.adj",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 60)
+ggsave(fig1e_p,filename = "fig1e_p.pdf",width = 8.5,height = 7,units = "in")
+fig4a_stat <- meta %>% left_join(TAA_count)%>% group_by(SUBGROUP) %>% get_summary_stats() %>% ungroup() %>% filter(variable=="Count")
 
 
 #TAA pMHC, I 8-15 AA,II 15AA
 TAA_I_count <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/count/TAA_HLA_I.txt")
 TAA_II_count <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/count/TAA_HLA_II.txt")
-TAA_all_count <- TAA_I_count %>% full_join(TAA_II_count) %>% full_join(meta) %>% mutate_all(funs(replace_na(.,0))) %>% mutate(Count=HLA_I_Count+HLA_II_Count)
+TAA_all_count <- TAA_I_count %>% full_join(TAA_II_count) %>% full_join(meta) %>% mutate_all(funs(ifelse(is.na(.),0,.))) %>% mutate(Count=HLA_I_Count+HLA_II_Count)
+
+fig4b_stat <- TAA_all_count[,1:4] %>% group_by(SUBGROUP) %>% get_summary_stats() %>% ungroup()
 ```
 
 ### ~~Fig. 4b~~
@@ -560,11 +631,11 @@ fig4b_p <- fig4b %>% ggplot(aes(x=SUBGROUP,y=HLA_I_Count))+
   scale_fill_manual(values=group_colors)+
    theme(axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "TAA MHC-I Count")+ylim(0,40)
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "TAA MHC-I Count")+ylim(0,95)
 
-fig4b_wilcox <- fig4b %>% wilcox_test(HLA_I_Count ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position() %>% mutate(y.position=c(38,36,34))
-fig4b_p+stat_pvalue_manual(fig4b_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 40)
-
+fig4b_wilcox <- fig4b %>% wilcox_test(HLA_I_Count ~ SUBGROUP,p.adjust.method = "BH") %>% filter(p.adj <= 0.2) %>% add_xy_position() 
+fig3a_p <- fig4b_p+stat_pvalue_manual(fig4b_wilcox,label = "p.adj",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 95)
+ggsave(fig3a_p,filename = "fig3a_p.pdf",width = 8.5,height = 7,units = "in")
 fig4c <- TAA_II_count %>% left_join(meta)
 fig4c$SUBGROUP <- factor(fig4c$SUBGROUP,levels = col_order)
 fig4c_p <- fig4c %>% ggplot(aes(x=SUBGROUP,y=HLA_II_Count))+
@@ -574,25 +645,27 @@ fig4c_p <- fig4c %>% ggplot(aes(x=SUBGROUP,y=HLA_II_Count))+
   scale_fill_manual(values=group_colors)+
    theme(axis.line = element_line(size = 0.5, 
     linetype = "solid"), panel.background = element_rect(fill = NA, 
-    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "TAA MHC-II Count")+ylim(0,40)
+    linetype = "solid"), plot.background = element_rect(linetype = "solid")) +labs(x= "",y = "TAA MHC-II Count")+ylim(0,45)
 
-fig4c_wilcox <- fig4c %>% wilcox_test(HLA_II_Count ~ SUBGROUP,p.adjust.method = "bonferroni",ref.group = "Group 3") %>% add_xy_position() %>% mutate(y.position=c(38,36,34))
-fig4c_p+stat_pvalue_manual(fig4c_wilcox,label = "p.adj.signif",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 40)
-
-
-
+fig4c_wilcox <- fig4c %>% wilcox_test(HLA_II_Count ~ SUBGROUP,p.adjust.method = "BH",ref.group = "Group 3") %>% filter(p.adj <= 0.2) %>% add_xy_position()
+fig3b_p <- fig4c_p+stat_pvalue_manual(fig4c_wilcox,label = "p.adj",tip.length = 0.01,xmin = "group1",xmax = "group2")+stat_compare_means(method = "kruskal.test",label.y = 45)
+ggsave(fig3b_p,filename = "fig3b_p.pdf",width = 8.5,height = 7,units = "in")
 ```
 
 ### Fig. 4d Unsupervised Hierarchical Cluster Analysis of Medulloblastoma Tumor Associated Antigens
-C1 = Oncofetal Antigens
-C2 = Low Confidence Cancer Testis Antigens (TPM 1e0-1e1) and others
-C3 = High Confidence Cancer Testis Antigens (TPM 1e1-1e2)
-```{r message=F}
-mb_fetal_testis_normal <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/TAA_fetal_testis_normal_tx.txt") %>% column_to_rownames(var="transcript_id") %>% dplyr::select(!contains("Adult"))
-mb_fetal_testis_normal <- mb_fetal_testis_normal %>% dplyr::select(meta$PID,everything())
+#### C1 = High Confidence Cancer Testis Antigen (TPM 1e1-1e2)- IMPG2
+#### C2 = Low Confidence Cancer Testis Antigens (TPM 1e0-1e1) and others
+#### C3 = Oncofetal Antigen - NEURORG1
+```{r message=F,warning=F,fig.width = 12,fig.height = 8}
+mb_fetal_testis_normal <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/MB_fetal_testis_normal_mean_2sd_tx") %>% column_to_rownames(var="transcript_id") 
+mb_fetal_testis_normal <- mb_fetal_testis_normal %>% dplyr::select(meta$PID,fetal,testis,everything())
+
+# combine all testis
+# mb_fetal_testis_normal <- mb_fetal_testis_normal %>% mutate(testis = (mb_fetal_testis_normal%>% dplyr::select(contains("GTEX")) %>% apply(1,max))) %>% dplyr::select(!contains("GTEX")) 
+
 mb_alone_taa <- mb_fetal_testis_normal[,c(1:170)]
 col_name_pheatmap <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/TAA_fetal_testis_normal_tx_name.txt") %>% arrange(factor(PID,levels = colnames(mb_fetal_testis_normal))) %>% column_to_rownames(var="PID") 
- col_name_complex <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/TAA_fetal_testis_normal_tx_name.txt") %>% arrange(factor(PID,levels = colnames(mb_fetal_testis_normal)))
+ col_name_complex <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/TAA_fetal_testis_normal_tx_mean_2sd_name.txt") %>% arrange(factor(PID,levels = colnames(mb_fetal_testis_normal)))
  col_name_complex$Group <- factor(col_name_complex$Group,levels = c("WNT","SHH","Group 3","Group 4","Fetal Cerebellum","Testis","Normal"))
  taa_all_enst <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/cTAA_dict/pid_enst_pMHC.txt") %>% left_join(meta)
 ## TAA pre
@@ -637,9 +710,12 @@ col_name_pheatmap <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/TAA_fe
 
 # TAA post pMHC
 
-
-
 f1=colorRamp2(c(0,0.5,1,10),c("#4575B4","#FEFEC0","red","red4"))
+
+
+
+
+
 set.seed(1234)
 mb_fetal_testis_normal_post <- mb_fetal_testis_normal[rownames(mb_fetal_testis_normal) %in% taa_all_enst$transcript_id,]
 
@@ -647,9 +723,12 @@ kclus <- kmeans(mb_fetal_testis_normal_post,3,iter=5000)
 split <- paste0("Cluster\n",kclus$cluster)
 cluster_scale <- data.frame(Cluster=sort(kclus$cluster))
 cluster_scale$transcript_id <- row.names(cluster_scale)
+TAA <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/TAA_fetal_testis.txt")
 cluster_scale <- cluster_scale %>% left_join(TAA) %>% mutate(testis_max=2^testis_max)
+write.table(cluster_scale,file = "/blue/mitchell/changlin/MB_immune/TAA/results/cluster_scale.txt",quote = FALSE,row.names = FALSE,col.names = TRUE,sep="\t")
 left_annotation <- rowAnnotation(block = anno_block(gp = gpar(2:4),
-                                                      labels = c("C1", "C2", "C3"), labels_gp = gpar(col = c("black", "blue", "orange"),fontsize=9)))
+                                                      labels = c("1", "2", "3"), labels_gp = gpar(col = c("black", "blue", "orange"),fontsize=9)))
+
 hm_TAA_post=Heatmap(as.matrix(mb_fetal_testis_normal_post),
                use_raster = T,raster_device = "tiff",
                col = f1,
@@ -673,23 +752,106 @@ hm_TAA_post=Heatmap(as.matrix(mb_fetal_testis_normal_post),
               left_annotation = left_annotation,
                top_annotation = HeatmapAnnotation(Group=col_name_complex$Group,
                                                    which = "col",
+                                                  col=list(Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green","Fetal Cerebellum"="orange","Testis"="gray","Normal"="black"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green")),                                                annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+# Mark gene
+old.pos <- data.frame(transcript_id=rownames(mb_fetal_testis_normal_post),old_pos=c(1:nrow(mb_fetal_testis_normal_post)))
+new.pos <- data.frame(old_pos=unlist(row_order(hm_TAA_post)),new_pos=c(1:nrow(mb_fetal_testis_normal_post))) %>% right_join(old.pos) %>% right_join(cluster_scale) %>% arrange(old_pos)
+mark_gene <- c("IMPG2","NEUROG1")
+mark_gene_pos <- which(new.pos$gene_name %in% mark_gene)
+row_anno <- rowAnnotation(mark_gene=anno_mark(at=mark_gene_pos,labels = mark_gene,labels_gp=gpar(fontsize=10)))
+
+hm_TAA_post=Heatmap(as.matrix(mb_fetal_testis_normal_post),
+               use_raster = T,raster_device = "tiff",
+               col = f1,
+               row_split = split,
+               row_dend_reorder = TRUE,
+               cluster_columns = F,
+              cluster_rows = T,
+               show_row_names = F,
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB TAA",
+               column_title_gp = gpar(fontsize=16,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=16,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              left_annotation = left_annotation,
+              right_annotation = row_anno,
+               top_annotation = HeatmapAnnotation(Group=col_name_complex$Group,
+                                                   which = "col",
                                                   col=list(Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green","Fetal Cerebellum"="orange","Testis"="gray","Normal"="black"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green")),
                                                   annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
 
-old.pos <- data.frame(transcript_id=rownames(mb_fetal_testis_normal_post),old_pos=c(1:nrow(mb_fetal_testis_normal_post)))
-new.pos <- data.frame(old_pos=unlist(row_order(hm_TAA_post)),new_pos=c(1:nrow(mb_fetal_testis_normal_post))) %>% right_join(old.pos) %>% right_join(cluster_scale) %>% arrange(new_pos)
-
 hm_TAA_post
-draw(hm_TAA_post,annotation_legend_side="bottom",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
-
+pdf("fig3c_p.pdf",width = 16,height = 8)
+draw(hm_TAA_post,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+dev.off()
 
 ```
 
-### Fig. Supp 4 Pathway Enrichment of TAA
+### Fig. 4e Single Cell RNAseq Overlook
+```{r warning=FALSE,message=FALSE,fig.height=8,fig.width=16}
+
+primary_obj <- readRDS("/blue/mitchell/changlin/MB_immune/data/primary_MB_TAA_res3_scRNASeq.rds")
+primary_obj@meta.data$subgroup <- factor(primary_obj@meta.data$subgroup,levels = c("WNT","SHH-adult","SHH-infant","Group 3","Group 4"))
+group_colors <- c("blue","dark red","red","gold","green4")
+fig4a <- DimPlot(primary_obj,reduction = "tsne",group.by = "subgroup",label = FALSE,pt.size = 0.5)+ggtitle("Primary Medulloblastomas (n=23)")+scale_color_manual(values=group_colors)& theme(title = element_text(size = 20),strip.text.x=element_text(size=20),legend.text = element_text(size =20))
+
+fig4a
+```
+
+### Fig. s4a Single Cell RNAseq by Subgroups
+```{r}
+figs4a <- DimPlot(primary_obj,reduction = "tsne",group.by = "sample",split.by = "subgroup",label = FALSE,pt.size = 1)+ggtitle("Primary Medulloblastomas (n=23)")
+
+figs4a
+
+```
+
+### Fig. s4b Top 3 Immunogenic TAA on single cells
+```{r warning=FALSE,message=FALSE,fig.height=9,fig.width=18}
+
+
+
+figs4b <- FeaturePlot(primary_obj,features = c("NEUROG1","PIK3R3","IMPG2"),cols = c("grey","blue"),reduction = "tsne",split.by = "subgroup",pt.size = 1)
+figs4b
+
+figs4b <- FeaturePlot(primary_obj,features = c("NEUROG1","PIK3R3","IMPG2"),cols = c("grey","blue"),reduction = "tsne",pt.size = 1)
+
+```
+
+### Fig. s4c All Immunogenic TAA on single cells
+```{r warning=FALSE,message=FALSE,fig.height=8,fig.width=16}
+figs4c <- FeaturePlot(primary_obj,features = "All_TAA",cols = c("grey","blue"),reduction = "tsne",split.by = "subgroup",pt.size = 1)
+figs4c
+
+figs4c <- FeaturePlot(primary_obj,features = "All_TAA",cols = c("grey","blue"),reduction = "tsne",pt.size = 1)
+```
+
+### Fig.4e Immunogenic TAAs on Single Cells
+```{r fig.width=12,fig.height=12}
+figs4b+figs4c
+```
+
+### Table s9 TAA coverage, Top 5 genes
+```{r}
+fread("/blue/mitchell/changlin/MB_immune/TAA/results/gse119926_primary_TAA_per.txt") %>% filter(V1 %in% c("All_TAA","NEUROG1","IMPG2","PIK3R3")) %>% transmute(TAA=V1,`Single Cell Coverage`=paste0(round(per*100,2),'%')) %>%  knitr::kable()
+```
+
+
+
+
+
+### Fig. S4d Pathway Enrichment of TAA
 ```{r message=F}
 gostres_all <- gost(query =c(cluster_scale$gene_name),organism=("hsapiens"))
 p <- gostplot(gostres_all,capped = FALSE,interactive = TRUE)
-
+p$data %>% knitr::kable()
 
 # gostres_1 <- gost(query =c((cluster_scale %>% filter(Cluster=="1"))$gene_name),organism=("hsapiens"))
 # gostres_3 <- gost(query =c((cluster_scale %>% filter(Cluster=="3"))$gene_name),organism=("hsapiens"))
@@ -702,8 +864,59 @@ p <- gostplot(gostres_all,capped = FALSE,interactive = TRUE)
 # head(gostres_all$result)
 p
 
+
+p <- gost(query =(cluster_scale$gene_name),organism=("hsapiens"),ordered_query = FALSE, multi_query = FALSE, significant = TRUE, exclude_iea = TRUE, measure_underrepresentation = FALSE, evcodes = TRUE, user_threshold = 0.05, correction_method = "g_SCS", domain_scope = "annotated",sources = c("GO:BP","KEGG","REAC","WP"))
+
 ```
-### Table 5 Immunegenecity Rate of all patients TAA
+
+
+### Fig. s4e MB CTA 
+```{r warning=FALSE,message=FALSE}
+CTA <- read_excel("/blue/mitchell/changlin/MB_immune/data/CancerTestisAntigenLists.xlsx") %>% as.list()
+CTA <- data.frame(CTA=unlist(CTA)) %>% na.omit %>% unique()
+type<- fread("/blue/mitchell/changlin/MB_immune/TAA/data/gencode.v23.type.gtf") %>% dplyr::select("gene_id","gene_name")%>% unique()
+mb_cta <- fread("/blue/mitchell/changlin/MB_immune/TAA/data/MB_gene_transcript_TPM/MB.genes.TPM.tsv") %>% left_join(type) %>% dplyr::select(-gene_id)
+mb_cta <- mb_cta[mb_cta$gene_name %in% CTA$CTA,]
+mb_cta$gene_name <- make.names(mb_cta$gene_name,unique = TRUE)
+mb_cta <- mb_cta %>% column_to_rownames(var = "gene_name")
+
+hm_CTA=Heatmap(as.matrix(mb_cta),
+               use_raster = T,raster_device = "tiff",
+               col = f1,
+               cluster_columns = F,
+               cluster_rows = T,
+               show_row_names = F,
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB CTA",
+               column_title_gp = gpar(fontsize=16,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=16,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              # left_annotation = left_annotation,
+               top_annotation = HeatmapAnnotation(Group=col_name_complex[c(1:170),]$Group,
+                                                   which = "col",
+                                                  col=list(Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green")),
+                                                  annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+
+hm_CTA
+```
+
+### Table s10, Published CTA in MB immunogenic TAAs
+```{r message=FALSE,warning=FALSE}
+new.pos$gene_name %in% rownames(mb_cta) %>% table %>% knitr::kable()
+
+## 36 TAAs are cancer testis antigens
+```
+
+
+
+### Table s11 Immunogenicity Rate of all patients TAA
 ```{r}
 
 total_freq_taa <- taa_all_enst %>% dplyr::select(PID,transcript_id) %>%
@@ -715,13 +928,13 @@ table5 <- tibble(`One+`=paste0(round((total_freq_taa %>% filter(N>0) %>%nrow() /
 table5 %>% knitr::kable()
 ```
 
-### Table 6 Immunegenecity Rate of TAA by subgroups
+### Table s12 Immunegenicity Rate of TAA by subgroups
 ```{r}
-table6 <- total_freq_taa %>% filter(N>0) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`One+`=paste0(round(N/Freq*100,1),'%')) %>%left_join(total_freq %>% filter(N>1) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`Two+`=paste0(round(N/Freq*100,1),'%'))) %>% left_join(total_freq %>% filter(N>2) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`Three+`=paste0(round(N/Freq*100,1),'%'))) %>% arrange(factor(SUBGROUP,levels = col_order))
+table6 <- total_freq_taa %>% filter(N>0) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`One+`=paste0(round(N/Freq*100,1),'%')) %>%left_join(total_freq_taa %>% filter(N>1) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`Two+`=paste0(round(N/Freq*100,1),'%'))) %>% left_join(total_freq_taa %>% filter(N>2) %>% group_by(SUBGROUP) %>%summarise(N=n()) %>% cbind(table(meta$SUBGROUP) %>% as.data.frame())%>% transmute(SUBGROUP,`Three+`=paste0(round(N/Freq*100,1),'%'))) %>% arrange(factor(SUBGROUP,levels = col_order))
 table6 %>% knitr::kable()
 ```
 
-### Table 7 Top3 Frequent TAA pre/post pMHC
+### Table s13 Top3 Frequent TAA pre/post pMHC
 
 ```{r message=F,warning=F}
 mb_taa_pre <- mb_alone_taa %>% transmute(expressed_count=apply(mb_alone_taa,1,function(x)sum(x>1))) %>% arrange(desc(expressed_count)) %>% rownames_to_column(var="transcript_id") 
@@ -731,17 +944,15 @@ mb_taa_pre_top5_count <- mb_taa_pre_top5_count[mb_taa_pre_top5_count$transcript_
 mb_taa_post_top5_count <- taa_all_enst[taa_all_enst$transcript_id %in% mb_taa_pre_top5$transcript_id,]
 
 table7 <- mb_taa_pre_top5_count %>% group_by(SUBGROUP,transcript_id) %>% summarise(TAA_Pre_pMHC_Count=n()) %>% 
- left_join(mb_taa_post_top5_count %>% dplyr::select(PID,SUBGROUP,transcript_id) %>% unique() %>%  group_by(SUBGROUP,transcript_id) %>% summarise(TAA_Post_pMHC_Count=n()),by=c("SUBGROUP","transcript_id")) %>% mutate_all(funs(replace_na(.,0))) %>% left_join(TAA) %>% dplyr::select(SUBGROUP,gene_name,TAA_Pre_pMHC_Count,TAA_Post_pMHC_Count) %>% arrange(gene_name)
+ left_join(mb_taa_post_top5_count %>% dplyr::select(PID,SUBGROUP,transcript_id) %>% unique() %>%  group_by(SUBGROUP,transcript_id) %>% summarise(TAA_Post_pMHC_Count=n()),by=c("SUBGROUP","transcript_id")) %>% mutate_all(funs(ifelse(is.na(.),0,.))) %>% left_join(TAA) %>% dplyr::select(SUBGROUP,gene_name,TAA_Pre_pMHC_Count,TAA_Post_pMHC_Count) %>% arrange(gene_name)
 table7 %>% knitr::kable()
 
 ```
 
-
-
-### Fig. 5a MB Proteomics vs Genomics
-```{r message=F}
-fig5a <- fread("/orange/mitchell/MB_immune/Mass/MB_mass_count.txt") %>% left_join(meta)%>% arrange(factor(SUBGROUP,levels=col_order))%>% mutate(pid=paste(SUBGROUP,PID,sep = "_")) %>% dplyr::select(pid,c(2:9))%>% pivot_longer(!pid,names_to="Type",values_to="Count") %>% separate(Type,sep = "_",into = c("Type","Platform")) %>% mutate_all(funs(str_replace_all(.,c("Tx"="Genomics","MS"="Proteomics","Neo"="Mutation")))) %>%filter(Type != "Total")
-
+### Fig. 5 MB Proteomics vs Genomics
+```{r message=F,warning=FALSE,fig.height=8,fig.width=16}
+#fig5a <- fread("/orange/mitchell/MB_immune/Mass/MB_mass_count.txt") %>% left_join(meta)%>% arrange(factor(SUBGROUP,levels=col_order))%>% mutate(pid=paste(SUBGROUP,PID,sep = "_")) %>% dplyr::select(pid,c(2:9))%>% pivot_longer(!pid,names_to="Type",values_to="Count") %>% separate(Type,sep = "_",into = c("Type","Platform")) %>% mutate_all(funs(str_replace_all(.,c("Tx"="Genomics","MS"="Proteomics","Neo"="Mutation")))) %>%filter(Type != "Total")
+fig5a <- read.csv("MB_mass_count.csv",header = T)
 fig5a$pid <- factor(fig5a$pid)
 fig5a$Type <- factor(fig5a$Type,levels = c("Mutation","Fusion","TAA"))
 fig5a$Platform <- factor(fig5a$Platform,levels = c("Genomics","Proteomics"))
@@ -749,45 +960,124 @@ fig5a$Count <- as.double(fig5a$Count)
 fig5a <- fig5a %>% group_by(pid,Type) %>% transmute(Platform, Count,Per=paste0(round(Count[Platform=="Proteomics"] / Count[Platform=="Genomics"] *100),"%")) %>%mutate(Per = replace(Per, Per=="NaN%","")) %>% mutate(Per =replace(Per,Platform=="Proteomics","")) 
 
 
-theme_set(
-  theme_classic()
-)
-
 fig5a_p <- fig5a %>% ggplot(aes(x=Type, y=Count,fill=Platform)) + 
   geom_bar(stat="identity",position = "identity") +
   facet_grid(~pid) + 
   labs(title="MB Immunotargetable Antigens", x="", y="Count", fill="Platform") + 
-  theme(axis.text.x = element_text(angle =45,hjust = 1 ),plot.title = element_text(size=25,margin=margin(t=20, b=20)))
-fig5a_p+geom_text(aes(label=fig5a$Per,group=Type,,vjust = -.5),position = position_dodge((0.8)))
+  theme(axis.text.x = element_text(angle =45,hjust = 1 ),plot.title = element_text(size=25,margin=margin(t=20, b=20)),strip.text.x=element_text(size=14,face = "bold"))
+fig3f_p <- fig5a_p+geom_text(aes(label=fig5a$Per,group=Type,,vjust = -.5),position = position_dodge((0.8)))
 
-
-
+ggsave(fig3f_p,filename = "fig3f_p.pdf",width = 16,height = 7,units = "in")
 
 ```
-### Fig. 6 Immunologic Landscape
 
+### Fig. 6 Immunologic Landscape
 ### Fig. 6a Group 3 Medulloblastoma Antigen Presentation and Processing Pathway
 ![Fig. 6a Antigen Presentation and Processing Pathway of MB](/blue/mitchell/changlin/MB_immune/Immune/results/group3_antigenPresentation_2.jpg)
 
-### Fig. 6b Medulloblastoma Immune Deconvolution
-*use a 10x 68k pbmc scRNAseq data to deconvolute MB RNAseq/MA data*
-```{r message=F, warning=F}
+### Fig. 6b Antigen Presentation and Processing Expression (Microarray)
+```{r message=F,warning=F}
 # load("~/changlin/MB_immune/Immune/results/MB_MA_RNAseq_10x_68k_PBMC_Cibersortx.RData")
 
 # Microarray
 
-# fig6b <- draw(hm_mb_ma_68k,annotation_legend_side="bottom",heatmap_legend_side="right",merge_legend=T)
+# fig6b <- draw(hm_mb_ma_68k,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
 
 #fig6b
 # MB MA scRNAseq 10x 68k sorted pbmc cibersortx 
 new_label <- c("Treg","CD4 Memory T Cells","CD8 Naive T Cells", "Dendritic Cells","CD56 NK Cells","CD34 HSC","CD19 B Cells","CD14 Monocytes","CD4 Naive T Cells", "CD4 T Helper Cells")
 
-
 ma_normal_pheno <- read_tsv("/blue/mitchell/changlin/MB_immune/Immune/meta/Cavalli_pheno.tsv")
 ma_pheno <- ma_normal_pheno[c(1:763),]
 ma_pheno$subgroup <- factor(ma_pheno$subgroup,levels = col_order)
 ma_pheno <- ma_pheno %>% arrange(factor(subgroup,levels = col_order),status,desc(factor(survival)))
+row_anno_antigen <- fread("/blue/mitchell/changlin/MB_immune/Immune/data/antigen_presentation_genes.txt")
+ma_antigen_presentation <- fread("/blue/mitchell/changlin/MB_immune/Immune/data/Cavalli_MB_MA_antigen_presentation.txt")
+ma_antigen_presentation <- ma_antigen_presentation[ma_antigen_presentation$V1 %in%row_anno_antigen$Gene,] %>% arrange(factor(V1,levels =row_anno_antigen$Gene))
+ma_antigen_presentation <-ma_antigen_presentation %>%column_to_rownames(var = "V1") %>% dplyr::select(c(1:763))
 
+#write.table(rownames(ma_antigen_presentation) %>%as.data.frame(),file = "/blue/mitchell/changlin/MB_immune/Immune/data/antigen_presentation_genes.txt",sep = "\t",quote = F,row.names = F,col.names = T)
+f1=colorRamp2(c(0,0.5,1,10),c("#4575B4","#FEFEC0","red","red4"))
+              
+hm_mb_ma_antigen_presentation=Heatmap(ma_antigen_presentation,
+                      #use_raster = T,raster_device = "tiff",
+                      #use_raster = T,
+                      col = f1,
+                      cluster_columns = F,
+                      cluster_rows = F,
+                      show_row_names = T,
+                      row_names_gp = grid::gpar(fontsize=8,fontface="bold"),
+                      show_column_names = F,
+                      name="Gene Expression",
+                      column_title = "MB Patients (n=763)",
+                      column_title_gp = gpar(fontsize=14,fontface="bold"),
+                      row_title = "Antigen Processing and Presentation",
+                      row_title_gp = gpar(fontsize=12,fontface="bold"),
+                      border=T,
+                      clustering_distance_rows = "euclidean",
+                      clustering_method_rows = "complete",
+                      heatmap_legend_param = list(
+                        title = "Score",
+                        title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+                      right_annotation = rowAnnotation(Pathway=row_anno_antigen$Annotation),
+                       top_annotation = HeatmapAnnotation(Subtype=ma_pheno$subgroup,
+                  which = "col",                                col=list(Age=col_age,Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"))),
+)
+pdf("fig6a_p.pdf",width = 16,height = 8)
+draw(hm_mb_ma_antigen_presentation,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+dev.off()
+
+
+write.table(ma_antigen_presentation,"ma_antigen_presentation,.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+write.table(ma_pheno,"ma_pheno_gsea.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+write.table(row_anno_antigen,"row_anno_antigen_gsea.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+```
+
+## Fig. s6a Antigen Presentation and Processing Expression (RNAseq)
+```{r}
+## RNAseq
+
+rna_antigen_presentation <- fread("/blue/mitchell/changlin/MB_immune/TAA/data/MB_gene_transcript_TPM/MB.genes.TPM.tsv") %>% left_join(type) %>% dplyr::select(-gene_id)
+
+rna_antigen_presentation <- rna_antigen_presentation[rna_antigen_presentation$gene_name %in% rownames(ma_antigen_presentation),]
+rna_antigen_presentation$gene_name <- make.names(rna_antigen_presentation$gene_name,unique = TRUE)
+rna_antigen_presentation <- rna_antigen_presentation %>% arrange(factor(gene_name,levels =row_anno_antigen$Gene))%>% column_to_rownames(var = "gene_name")
+
+hm_rna_antigen_presentation=Heatmap(as.matrix(rna_antigen_presentation),
+               use_raster = T,raster_device = "tiff",
+               col = f1,
+               cluster_columns = F,
+               cluster_rows = F,
+               show_row_names = T,
+               row_names_gp = gpar(fontsize=4),
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB Antigen Processing and Presentation (n=170)",
+               column_title_gp = gpar(fontsize=16,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=16,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              # left_annotation = left_annotation,
+              right_annotation = rowAnnotation(Pathway=row_anno_antigen$Annotation),
+               top_annotation = HeatmapAnnotation(Group=col_name_complex[c(1:170),]$Group,
+                                                   which = "col",
+                                                  col=list(Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green")),
+                                                  annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+
+
+draw(hm_rna_antigen_presentation,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+
+
+```
+
+### Fig. 6c Medulloblastoma Immune Deconvolution (Microarray)
+*use a 10x 68k pbmc scRNAseq data to deconvolute MB RNAseq/MA data*
+```{r fig.height=8,fig.width=18}
 mb_ma <- read_tsv("/blue/mitchell/changlin/MB_immune/Immune/results/CIBERSORTx_Job2_Adjusted_MB_MA_10x_68k_pbmc.txt") %>% t() 
 colnames(mb_ma) <- as.matrix(mb_ma)[1,]
 mb_ma <- mb_ma[c(2:12),]
@@ -795,8 +1085,6 @@ mb_ma <- mb_ma[-3,]
 mb_ma_row <- rownames(mb_ma)
 mb_ma <- apply(mb_ma,2,as.numeric)
 rownames(mb_ma) <- new_label
-
-
 hm_mb_ma_68k=Heatmap(pheatmap:::scale_rows(mb_ma),
                       col = colorRamp2(c(-2,0,2),c("blue","white","red")),
                       cluster_columns = F,
@@ -806,7 +1094,7 @@ hm_mb_ma_68k=Heatmap(pheatmap:::scale_rows(mb_ma),
                       name="Gene Expression",
                       column_title = "MB Patients (n=763)",
                       column_title_gp = gpar(fontsize=16,fontface="bold"),
-                      row_title = "CibersortX scRNAseq x Microarray",
+                      row_title = "CibersortX Absolute Score",
                       row_title_gp = gpar(fontsize=16,fontface="bold"),
                       border=T,
                       clustering_distance_rows = "euclidean",
@@ -818,15 +1106,740 @@ hm_mb_ma_68k=Heatmap(pheatmap:::scale_rows(mb_ma),
                                              Age=ma_pheno$Age,
                                              Gender=ma_pheno$Gender,
                                              Vital_Status=ma_pheno$status,
-                                             Overall_Survival=anno_lines(ma_pheno$survival,gp=gpar(frontsize=8)),
+                                        Overall_Survival=anno_lines(ma_pheno$survival,gp=gpar(frontsize=8)),
                                                which = "col",
-                                             col=list(Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+                                          col=list(Age=col_age,Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
 )
 
-draw(hm_mb_ma_68k,annotation_legend_side="bottom",heatmap_legend_side="right",merge_legend=T)
+pdf("fig6c_p.pdf",width = 16,height = 8)
+draw(hm_mb_ma_68k,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+dev.off()
+write.table(mb_ma,"mb_ma.txt",sep = "\t",quote = F,col.names = T,row.names = T)
+
+
+mb_ma <- as.data.frame(mb_ma)
+mb_ma <- mb_ma %>% rownames_to_column(var = "Immune_Infiltration")
+mb_ma <- mb_ma %>% pivot_longer(cols=starts_with("GSM"),names_to = "geo_accession",values_to = "Absolute_Score") %>% left_join(ma_pheno) %>% dplyr::select(subgroup,Immune_Infiltration,"Absolute_Score")
+p_mb_ma <- ggplot(mb_ma,aes(x=Immune_Infiltration,y=Absolute_Score,fill=subgroup))+geom_boxplot()+
+  scale_fill_manual(values = group_colors)
+
+
+
+mb_ma$Immune_Infiltration <- factor(mb_ma$Immune_Infiltration)
+mb_ma_stat <- mb_ma %>% group_by(Immune_Infiltration) %>% wilcox_test(Absolute_Score~subgroup,p.adjust.method = "BH",ref.group = "Group 3")%>% add_xy_position() %>% mutate(y.position=3.5)
+
+pdf("fig6d_p.pdf",width = 12,height = 6)
+p_mb_ma + theme(axis.text.x = element_text(angle = 60,hjust = 1))+xlab("")+stat_compare_means(aes(group=subgroup),method = "kruskal.test",label="p.signif")
+dev.off()
+
+```
+Shared TAA within Grp3/4
+```{r}
+taa_all_enst <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/cTAA_dict/pid_enst_pMHC.txt") %>% left_join(meta) %>% left_join(TAA) %>% dplyr::select(PID,SUBGROUP,gene_name,transcript_name) %>% unique()
+
+taa_in_grp3_4_2 <-  taa_all_enst %>% filter(SUBGROUP %in% c("Group 3","Group 4" )) %>% group_by(transcript_name) %>% summarise(TAA_Count=n()) %>% filter(TAA_Count>1) %>% dplyr::select(transcript_name)
+
+
+grp3_4_rec_taa_mat <- mb_fetal_testis_normal_post %>% rownames_to_column(var="transcript_id") %>% left_join(TAA %>% dplyr::select(transcript_id,transcript_name)) %>% dplyr::select(-transcript_id) %>% column_to_rownames(var="transcript_name")
+
+hm_grp3_4_rec_taa=Heatmap(as.matrix(grp3_4_rec_taa_mat),
+               # use_raster = T,raster_device = "tiff",
+               col = f1,
+               #row_split = split,
+               row_dend_reorder = TRUE,
+               cluster_columns = F,
+               cluster_rows = T,
+               show_row_names = T,
+               row_names_gp = gpar(fontsize=3,fontface="bold"),
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB TAA",
+               column_title_gp = gpar(fontsize=12,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=9,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              #left_annotation = left_annotation,
+               top_annotation = HeatmapAnnotation(Group=col_name_complex$Group,
+                                                   which = "col",                                                 col=list(Age=col_age,Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green","Fetal Cerebellum"="orange","Testis"="gray","Normal"="black"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green")),                                           annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+
+hm_grp3_4_rec_taa
+pdf("fig5d_p.pdf",width =12,height = 6)
+draw(hm_grp3_4_rec_taa,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+dev.off()
+## Gr3 & 4 rec TAA pathway
+
+gostres_all <- gost(query =c(taa_in_grp3_4_2 %>% left_join(TAA) %>% pull(gene_name)),organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+p
+p$data %>% knitr::kable()
+publish_gostplot(p,highlight_terms = c("GO:0042826","KEGG:04550"))                      
+```
+
+
+
+Recurrent TAA in Grp3
+```{r}
+
+taa_all_enst <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/cTAA_dict/pid_enst_pMHC.txt") %>% left_join(meta) %>% left_join(TAA) %>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()
+
+taa_in_grp3_2 <-  taa_all_enst %>% filter(SUBGROUP=="Group 3") %>% group_by(gene_name) %>% summarise(TAA_Count=n()) %>% filter(TAA_Count>1) %>% dplyr::select(gene_name)
+
+taa_all_enst <-  taa_all_enst %>% group_by(SUBGROUP,gene_name) %>% summarise(TAA_Count=n()) %>% arrange(gene_name) %>% ungroup()
+
+
+
+
+taa_out_grp3_2 <-  taa_all_enst %>% left_join(taa_all_enst%>% dplyr::select(SUBGROUP,gene_name) %>%  group_by(gene_name) %>% summarise(N_across_groups=n())) 
+
+taa_out_grp3_2 <- taa_out_grp3_2 %>% filter(N_across_groups>1, SUBGROUP=="Group 3") %>% dplyr::select(gene_name)
+
+taa_grp3_2 <- rbind(taa_in_grp3_2,taa_out_grp3_2)
+
+taa_out_grp3_2_enst <- TAA %>% filter(gene_name %in% taa_out_grp3_2$gene_name) %>% pull(transcript_id)
+taa_grp3_2_enst <-  TAA %>% filter(gene_name %in% taa_grp3_2$gene_name) %>% pull(transcript_id)
+
+gostres_all <- gost(query =c(taa_grp3_2$gene_name),organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+p
+p$data %>% knitr::kable()
+publish_gostplot(p,highlight_terms = c("GO:0042826","KEGG:04550"))
+
+mb_grp3_rec_taa_mat <- mb_fetal_testis_normal_post[rownames(mb_fetal_testis_normal_post) %in% taa_grp3_2_enst,]
+
+mb_grp3_rec_taa_mat <- mb_grp3_rec_taa_mat %>% rownames_to_column(var="transcript_id") %>% left_join(TAA %>% dplyr::select(transcript_id,transcript_name)) %>% dplyr::select(-transcript_id) %>% column_to_rownames(var="transcript_name")
+
+
+f1=colorRamp2(c(0,0.5,1,10),c("#4575B4","#FEFEC0","red","red4"))
+
+hm_grp3_rec_taa=Heatmap(as.matrix(mb_grp3_rec_taa_mat),
+               # use_raster = T,raster_device = "tiff",
+               col = f1,
+               #row_split = split,
+               row_dend_reorder = TRUE,
+               cluster_columns = F,
+               cluster_rows = T,
+               show_row_names = T,
+               row_names_gp = gpar(fontsize=6),
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB TAA",
+               column_title_gp = gpar(fontsize=12,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=9,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              #left_annotation = left_annotation,
+               top_annotation = HeatmapAnnotation(Group=col_name_complex$Group,
+                                                   which = "col",                                                 col=list(Age=col_age,Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green","Fetal Cerebellum"="orange","Testis"="gray","Normal"="black"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green")),                                           annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+
+hm_grp3_rec_taa
+
+draw(hm_grp3_rec_taa,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+result <- gostres_all$result %>% apply(2,as.character)
+write.table(result,"grp3_rec_taa_pathway.txt",quote = FALSE,sep = "\t",row.names = F,col.names =T)
+
+```
+
+
+```{r}
+ taa_all_enst <- fread("/blue/mitchell/changlin/MB_immune/TAA/results/cTAA_dict/pid_enst_pMHC.txt") %>% left_join(meta)
+taa_list <- list(
+  WNT=(taa_all_enst %>% filter(SUBGROUP=="WNT") %>% dplyr::select(transcript_id) %>% unique() )$transcript_id,
+  SHH=(taa_all_enst %>% filter(SUBGROUP=="SHH") %>% dplyr::select(transcript_id) %>% unique())$transcript_id,
+  Group3=(taa_all_enst %>% filter(SUBGROUP=="Group 3") %>% dplyr::select(transcript_id) %>% unique())$transcript_id,
+  Group4=(taa_all_enst %>% filter(SUBGROUP=="Group 4") %>% dplyr::select(transcript_id)%>% unique() )$transcript_id
+)
+
+#  upset(fromList(taa_list),nsets = 4,point.size = 4,text.scale = 2,sets.bar.color = rev(c("blue","red","yellow","green")),
+# queries=list(list(query = intersects,params=list("Group3"),color = "yellow",active=F),
+#              list(query = intersects,params=list("Group3","Group4"),color = "yellow",active=F),
+# list(query = intersects,params=list("Group3","WNT"),color = "yellow",active=T),
+# list(query = intersects,params=list("Group3","SHH"),color = "yellow",active=T),
+# list(query = intersects,params=list("Group3","WNT","Group4"),color = "yellow",active=T),
+# list(query = intersects,params=list("Group3","SHH","Group4"),color = "yellow",active=T),
+# list(query = intersects,params=list("Group3","Group4","WNT","SHH"),color = "yellow",active=T)))
+
+upset(fromList(taa_list),nsets = 4,point.size = 4,text.scale = 2,sets.bar.color = rev(c("blue","red","yellow","green")))
+
+
+```
+
+
+### Neoantigen upset
+```{r}
+val_neo_mut <- val_neo_mut %>% dplyr::select(PID,gene_name) %>% left_join(meta) %>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()
+
+
+neo_list <- list(
+  WNT=(val_neo_mut %>% filter(SUBGROUP=="WNT") %>% pull(gene_name) %>% unique()),
+  SHH=(val_neo_mut %>% filter(SUBGROUP=="SHH") %>% pull(gene_name)%>% unique()),
+  Group3=(val_neo_mut %>% filter(SUBGROUP=="Group 3") %>%pull(gene_name)%>% unique()),
+  Group4=(val_neo_mut %>% filter(SUBGROUP=="Group 4") %>% pull(gene_name)%>% unique())
+)
+
+upset(fromList(neo_list),nsets = 4,nintersects = 20,point.size = 4,text.scale = 2,sets.bar.color = rev(c("blue","yellow","green","red")))
+
+# upset(fromList(neo_list),nsets = 4,point.size = 4,text.scale = 2,sets.bar.color = rev(c("blue","yellow","green","red")),
+# queries=list(list(query = intersects,params=list("Group3"),color = "yellow",active=F),
+# list(query = intersects,params=list("Group3","Group4"),color = "yellow",active=T),
+# list(query = intersects,params=list("Group3","SHH"),color = "yellow",active=T),
+# list(query = intersects,params=list("Group3","WNT"),color = "yellow",active=F),
+# list(query = intersects,params=list("Group3","Group4","WNT","SHH"),color = "yellow",active=T)))
+```
+##rec taa n>1
+```{r}
+#rec neo >= 2
+All_taa_freq <- taa_all_enst %>% dplyr:::select(PID,transcript_id,SUBGROUP) %>% group_by(transcript_id) %>% summarise(PID,SUBGROUP,N=n()) %>% filter(N>1) %>% left_join(TAA)
+
+mb_rec_taa_mat <- mb_fetal_testis_normal_post[rownames(mb_fetal_testis_normal_post) %in% All_taa_freq$transcript_id,]
+
+mb_rec_taa_mat <- mb_rec_taa_mat %>% rownames_to_column(var="transcript_id") %>% left_join(TAA %>% dplyr::select(transcript_id,transcript_name)) %>% dplyr::select(-transcript_id) %>% column_to_rownames(var="transcript_name")
+
+#rec TAA of all TAA
+82/99
+
+hm_rec_taa=Heatmap(as.matrix(mb_rec_taa_mat),
+               # use_raster = T,raster_device = "tiff",
+               col = f1,
+               #row_split = split,
+               row_dend_reorder = TRUE,
+               cluster_columns = F,
+               cluster_rows = T,
+               show_row_names = T,
+               row_names_gp = gpar(fontsize=6),
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB TAA",
+               column_title_gp = gpar(fontsize=12,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=9,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              #left_annotation = left_annotation,
+               top_annotation = HeatmapAnnotation(Group=col_name_complex$Group,
+                                                   which = "col",                                                 col=list(Age=col_age,Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green","Fetal Cerebellum"="orange","Testis"="gray","Normal"="black"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green")),                                           annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+
+hm_rec_taa
+
+draw(hm_rec_taa,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+
+write.table(mb_rec_taa_mat %>% rownames(),file = "rec_taa.txt",quote = F,sep = ",")
+
+
+grp3_rec_taa <- All_taa_freq %>% filter(SUBGROUP=='Group 3',N>1) %>% pull(gene_name) %>% unique()
+grp3_rec_neo <- All_mut_freq %>% filter(SUBGROUP=='Group 3',N>1) %>% pull(gene_name) %>% unique()
+
+gostres_all <- gost(query =grp3_rec_taa,organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+publish_gostplot(p,highlight_terms = c("GO:0042826","KEGG:04550"))+ggtitle("Group 3 Recurrent TAA Pathways")
+p$data %>% knitr::kable()
+
+grp4_rec_taa<- All_taa_freq %>% filter(SUBGROUP=='Group 4',N>1) %>% pull(gene_name) %>% unique()
+grp4_rec_neo<- All_mut_freq %>% filter(SUBGROUP=='Group 4',N>1) %>% pull(gene_name) %>% unique()
+gostres_all <- gost(query =grp4_rec_taa,organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+publish_gostplot(p,highlight_terms = c("GO:0042826","KEGG:05168"))+ggtitle("Group 4 Recurrent TAA Pathways")
+p$data %>% knitr::kable()
+wnt_rec_taa<- All_taa_freq %>% filter(SUBGROUP=='WNT',N>1) %>% pull(gene_name) %>% unique()
+wnt_rec_neo<- All_mut_freq %>% filter(SUBGROUP=='WNT',N>1) %>% pull(gene_name) %>% unique()
+
+gostres_all <- gost(query =wnt_rec_taa,organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+publish_gostplot(p,highlight_terms = c("WP:WP2064"))+ggtitle("WNT Recurrent TAA Pathways")
+p$data %>% knitr::kable()
+
+shh_rec_taa<- All_taa_freq %>% filter(SUBGROUP=='SHH',N>1) %>% pull(gene_name) %>% unique()
+
+shh_rec_neo<- All_mut_freq %>% filter(SUBGROUP=='SHH',N>1) %>% pull(gene_name) %>% unique()
+
+gostres_all <- gost(query =shh_rec_taa,organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+#no result return
+#p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+#p$data %>% knitr::kable()
+```
+
+
+###Neo Fusion TAA in or out groups
+```{r}
+
+## neo in and out
+grp3_in_rec_neo <- All_mut %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>%filter(SUBGROUP=="Group 3") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+grp4_in_rec_neo <- All_mut %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>% filter(SUBGROUP=="Group 4") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+shh_in_rec_neo <- All_mut %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>% filter(SUBGROUP=="SHH") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+wnt_in_rec_neo <- All_mut %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>% filter(SUBGROUP=="WNT") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+
+All_mut_rec <- All_mut %>% group_by(SUBGROUP,gene_name) %>% summarise(Mutation_Count=n()) %>% arrange(gene_name) %>% ungroup()
+
+All_mut_rec <- All_mut_rec %>% left_join(All_mut_rec %>% dplyr::select(SUBGROUP,gene_name) %>%  group_by(gene_name) %>% summarise(N_across_groups=n()),by="gene_name") %>% ungroup()
+
+
+grp3_out_rec_neo <-All_mut_rec %>% filter(N_across_groups>1, SUBGROUP=="Group 3") %>% pull(gene_name)
+grp4_out_rec_neo <-All_mut_rec %>% filter(N_across_groups>1, SUBGROUP=="Group 4") %>% pull(gene_name)
+shh_out_rec_neo <-All_mut_rec %>% filter(N_across_groups>1, SUBGROUP=="SHH") %>% pull(gene_name)
+wnt_out_rec_neo <-All_mut_rec %>% filter(N_across_groups>1, SUBGROUP=="WNT") %>% pull(gene_name)
+
+## taa in and out
+grp3_in_rec_taa <- All_taa_freq %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>%filter(SUBGROUP=="Group 3") %>%group_by(gene_name)%>%  summarise(taa_Count=n()) %>% filter(taa_Count>1) %>% pull(gene_name)
+
+grp4_in_rec_taa <- All_taa_freq %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>% filter(SUBGROUP=="Group 4") %>%group_by(gene_name)%>%  summarise(taa_Count=n()) %>% filter(taa_Count>1) %>% pull(gene_name)
+
+shh_in_rec_taa <- All_taa_freq %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>% filter(SUBGROUP=="SHH") %>%group_by(gene_name)%>%  summarise(taa_Count=n()) %>% filter(taa_Count>1) %>% pull(gene_name)
+
+wnt_in_rec_taa <- All_taa_freq %>%ungroup()%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()%>% filter(SUBGROUP=="WNT") %>%group_by(gene_name)%>%  summarise(taa_Count=n()) %>% filter(taa_Count>1) %>% pull(gene_name)
+
+
+All_taa_freq_rec <- All_taa_freq %>% group_by(SUBGROUP,gene_name) %>% summarise(taa_Count=n()) %>% arrange(gene_name) %>% ungroup()
+
+All_taa_freq_rec <- All_taa_freq_rec %>% left_join(All_taa_freq_rec %>% dplyr::select(SUBGROUP,gene_name) %>%  group_by(gene_name) %>% summarise(N_across_groups=n())) 
+
+grp3_out_rec_taa <-All_taa_freq_rec %>% filter(N_across_groups>1, SUBGROUP=="Group 3") %>% pull(gene_name)
+grp4_out_rec_taa <-All_taa_freq_rec %>% filter(N_across_groups>1, SUBGROUP=="Group 4") %>% pull(gene_name)
+shh_out_rec_taa <-All_taa_freq_rec %>% filter(N_across_groups>1, SUBGROUP=="SHH") %>% pull(gene_name)
+wnt_out_rec_taa <-All_taa_freq_rec %>% filter(N_across_groups>1, SUBGROUP=="WNT") %>% pull(gene_name)
+
+fusion_neo <- fusion_neo %>% mutate(gene_name=paste0(left_gene_name,"_",right_gene_name)) %>% left_join(meta)%>% dplyr::select(PID,SUBGROUP,gene_name) %>% unique()
+
+## fusion in and out
+grp3_in_rec_fusion <- fusion_neo %>% ungroup() %>% filter(SUBGROUP=="Group 3") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+grp4_in_rec_fusion <- fusion_neo %>% ungroup() %>% filter(SUBGROUP=="Group 4") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+shh_in_rec_fusion <- fusion_neo %>% ungroup() %>% filter(SUBGROUP=="SHH") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+wnt_in_rec_fusion <- fusion_neo %>% ungroup() %>% filter(SUBGROUP=="WNT") %>%group_by(gene_name)%>%  summarise(Mutation_Count=n()) %>% filter(Mutation_Count>1) %>% pull(gene_name)
+
+
+fusion_neo_rec <- fusion_neo %>% ungroup() %>% group_by(SUBGROUP,gene_name) %>% summarise(Mutation_Count=n()) %>% arrange(gene_name) %>% ungroup()
+
+fusion_neo_rec  <- fusion_neo_rec %>% ungroup() %>% left_join(fusion_neo %>% ungroup() %>% dplyr::select(SUBGROUP,gene_name) %>%  group_by(gene_name) %>% summarise(N_across_groups=n())) 
+
+grp3_out_rec_fusion <-fusion_neo_rec %>% ungroup() %>% filter(N_across_groups>1, SUBGROUP=="Group 3") %>% pull(gene_name)
+grp4_out_rec_fusion <-fusion_neo_rec %>% ungroup() %>% filter(N_across_groups>1, SUBGROUP=="Group 4") %>% pull(gene_name)
+shh_out_rec_fusion <-fusion_neo_rec %>% ungroup() %>% filter(N_across_groups>1, SUBGROUP=="SHH") %>% pull(gene_name)
+wnt_out_rec_fusion <-fusion_neo_rec %>% ungroup() %>% filter(N_across_groups>1, SUBGROUP=="WNT") %>% pull(gene_name)
+
+
+
+```
+
+### rec antigen within groups
+```{r fig.height=8,fig.width=18}
+col_HLA = c("TAA" = "blue", "Fusion" = "orange", "Mutation" = "red")
+
+alter_fun = list(
+  background = function(x, y, w,h) {
+    grid.rect(x, y, w-unit(4, "pt"),h-unit(2, "pt"),
+              gp = gpar(fill = "#CCCCCC", col = NA))
+  },
+  # big blue
+  TAA = function(x, y, w,h) {
+    grid.rect(x, y, w-unit(4, "pt"), h-unit(2, "pt"),
+              gp = gpar(fill = col_HLA["TAA"], col = NA))
+  },
+  # big red
+  Mutation = function(x, y, w,h) {
+    grid.rect(x, y, w-unit(4, "pt"), h-unit(2, "pt"),
+              gp = gpar(fill = col_HLA["Mutation"], col = NA))
+  },
+  # big orange
+  Fusion = function(x, y, w,h) {
+    grid.rect(x, y, w-unit(4, "pt"), h-unit(2, "pt"),
+              gp = gpar(fill = col_HLA["Fusion"], col = NA))
+  }
+)
+
+heatmap_legend_param = list(title = "Recurrent Antigen", at = c("Mutation","TAA","Fusion"), 
+                            labels = c("Mutation","TAA","Fusion"))
+
+#Grp3 
+
+Grp3_rec <- All_mut %>% filter(SUBGROUP=="Group 3",gene_name %in% grp3_in_rec_neo) %>% unique() %>% mutate(ICGC_alt="Mutation")%>%rbind(All_taa_freq %>% ungroup() %>% filter(SUBGROUP=="Group 3",gene_name %in% grp3_in_rec_taa) %>% mutate(ICGC_alt="TAA") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) %>%rbind(fusion_neo %>% ungroup()%>% filter(SUBGROUP=="Group 3",gene_name%in% grp3_in_rec_fusion) %>% mutate(ICGC_alt="Fusion") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) 
+
+# Grp3 Rec Count from 
+
+Grp3_rec_table <- Grp3_rec %>% group_by(PID,ICGC_alt) %>% summarize(N=n()) %>% ungroup()
+
+
+
+Grp3_rec <- Grp3_rec %>% dplyr::select(!SUBGROUP)%>%pivot_wider(names_from = 'PID',values_from='ICGC_alt') %>% column_to_rownames(var = "gene_name")
+Grp3_rec[is.na(Grp3_rec)]=""
+
+meta_Grp3 <- meta[meta$PID %in% colnames(Grp3_rec),]
+Grp3_rec <- Grp3_rec %>% dplyr::select(meta_Grp3$PID)
+
+column_title_ICGC = "Recurrent Antigens in Group 3 Medulloblastomas (n=41)"
+hm_Grp3_rec <- oncoPrint(Grp3_rec,
+          alter_fun = alter_fun, 
+          show_row_names = TRUE,
+          show_pct = TRUE,
+          col = col_HLA, 
+          column_order = meta_Grp3$PID,
+          heatmap_legend_param=heatmap_legend_param,
+          column_title = column_title_ICGC,
+          top_annotation = HeatmapAnnotation(Subtype=meta_Grp3$SUBGROUP,
+                                             Age=meta_Grp3$AGE,
+                                             Gender=meta_Grp3$GENDER,
+                                             Vital_Status=meta_Grp3$Donor_vital_status,
+                                      Overall_Survival=anno_lines(meta_Grp3$Donor_survival_time,gp=gpar(frontsize=8)),
+                                               which = "col",
+                                            col=list(Age=col_age,Subtype=c("Group 3"="yellow"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+)
+hm_Grp3_rec
+pdf("fig4e_p.pdf",width = 12,height = 6)
+draw(hm_Grp3_rec,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+dev.off()
+
+
+
+
+
+##Grp 4
+Grp4_rec <- All_mut %>% filter(SUBGROUP=="Group 4",gene_name %in% grp4_in_rec_neo) %>% unique() %>% mutate(ICGC_alt="Mutation")%>%rbind(All_taa_freq %>% ungroup() %>% filter(SUBGROUP=="Group 4",gene_name %in% grp4_in_rec_taa) %>% mutate(ICGC_alt="TAA") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) %>%rbind(fusion_neo %>% ungroup()%>% filter(SUBGROUP=="Group 4",gene_name%in% grp4_in_rec_fusion) %>% mutate(ICGC_alt="Fusion") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) 
+
+## Grp4 rec count
+Grp4_rec_table <- Grp4_rec %>% group_by(PID,ICGC_alt) %>% summarize(N=n()) %>% ungroup()
+
+
+
+Grp4_rec <- Grp4_rec %>% dplyr::select(!SUBGROUP)%>%pivot_wider(names_from = 'PID',values_from='ICGC_alt') %>% column_to_rownames(var = "gene_name")
+Grp4_rec[is.na(Grp4_rec)]=""
+
+meta_Grp4 <- meta[meta$PID %in% colnames(Grp4_rec),]
+Grp4_rec <- Grp4_rec %>% dplyr::select(meta_Grp4$PID)
+
+column_title_ICGC = "Recurrent Antigens in Group 4 Medulloblastomas (n=65)"
+hm_Grp4_rec <- oncoPrint(Grp4_rec,
+          alter_fun = alter_fun, 
+          show_row_names = TRUE,
+          show_pct = TRUE,
+          col = col_HLA, 
+          column_order = meta_Grp4$PID,
+          heatmap_legend_param=heatmap_legend_param,
+          column_title = column_title_ICGC,
+          row_title_gp = gpar(fontsize=5,fontface="bold"),
+          top_annotation = HeatmapAnnotation(Subtype=meta_Grp4$SUBGROUP,
+                                             Age=meta_Grp4$AGE,
+                                             Gender=meta_Grp4$GENDER,
+                                             Vital_Status=meta_Grp4$Donor_vital_status,
+                                      Overall_Survival=anno_lines(meta_Grp4$Donor_survival_time,gp=gpar(frontsize=8)),
+                                               which = "col",
+                                            col=list(Age=col_age,Subtype=c("Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+)
+hm_Grp4_rec
+pdf("fig4g_p.pdf",width = 12,height = 7)
+draw(hm_Grp4_rec,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+dev.off()
+
+
+#wnt 
+
+wnt_rec <- All_mut %>% filter(SUBGROUP=="WNT",gene_name %in% wnt_in_rec_neo) %>% unique() %>% mutate(ICGC_alt="Mutation")%>%rbind(All_taa_freq %>% ungroup() %>% filter(SUBGROUP=="WNT",gene_name %in% wnt_in_rec_taa) %>% mutate(ICGC_alt="TAA") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) %>%rbind(fusion_neo %>% ungroup()%>% filter(SUBGROUP=="WNT",gene_name%in% wnt_in_rec_fusion) %>% mutate(ICGC_alt="Fusion") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) 
+
+## wnt rec count
+wnt_rec_table <- wnt_rec %>% group_by(PID,ICGC_alt) %>% summarize(N=n()) %>% ungroup()
+
+
+
+
+
+wnt_rec <- wnt_rec %>% dplyr::select(!SUBGROUP)%>%pivot_wider(names_from = 'PID',values_from='ICGC_alt') %>% column_to_rownames(var = "gene_name")
+wnt_rec[is.na(wnt_rec)]=""
+
+meta_wnt <- meta[meta$PID %in% colnames(wnt_rec),]
+wnt_rec <- wnt_rec %>% dplyr::select(meta_wnt$PID)
+
+column_title_ICGC = "Recurrent Antigens in WNT Medulloblastomas (n=18)"
+hm_wnt_rec <- oncoPrint(wnt_rec,
+          alter_fun = alter_fun, 
+          show_row_names = TRUE,
+          show_pct = TRUE,
+          col = col_HLA, 
+          column_order = meta_wnt$PID,
+          heatmap_legend_param=heatmap_legend_param,
+          column_title = column_title_ICGC,
+          top_annotation = HeatmapAnnotation(Subtype=meta_wnt$SUBGROUP,
+                                             Age=meta_wnt$AGE,
+                                             Gender=meta_wnt$GENDER,
+                                             Vital_Status=meta_wnt$Donor_vital_status,
+                                      Overall_Survival=anno_lines(meta_wnt$Donor_survival_time,gp=gpar(frontsize=8)),
+                                               which = "col",
+                                            col=list(Age=col_age,Subtype=c("WNT"="blue"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+)
+hm_wnt_rec
+pdf("fig4a_p.pdf",width = 12,height = 6)
+draw(hm_wnt_rec,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+dev.off()
+
+#shh 
+
+shh_rec <- All_mut %>% filter(SUBGROUP=="SHH",gene_name %in% shh_in_rec_neo) %>% unique() %>% mutate(ICGC_alt="Mutation")%>%rbind(All_taa_freq %>% ungroup() %>% filter(SUBGROUP=="SHH",gene_name %in% shh_in_rec_taa) %>% mutate(ICGC_alt="TAA") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) %>%rbind(fusion_neo %>% ungroup()%>% filter(SUBGROUP=="SHH",gene_name%in% shh_in_rec_fusion) %>% mutate(ICGC_alt="Fusion") %>% dplyr::select(PID,SUBGROUP,ICGC_alt,gene_name) %>% unique()) 
+
+
+### shh rec count
+shh_rec_table <- shh_rec %>% group_by(PID,ICGC_alt) %>% summarize(N=n()) %>% ungroup()
+
+
+shh_rec <- shh_rec %>% dplyr::select(!SUBGROUP)%>%pivot_wider(names_from = 'PID',values_from='ICGC_alt') %>% column_to_rownames(var = "gene_name")
+shh_rec[is.na(shh_rec)]=""
+
+meta_shh <- meta[meta$PID %in% colnames(shh_rec),]
+shh_rec <- shh_rec %>% dplyr::select(meta_shh$PID)
+
+column_title_ICGC = "Recurrent Antigens in SHH Medulloblastomas (n=46)"
+hm_shh_rec <- oncoPrint(shh_rec,
+          alter_fun = alter_fun, 
+          show_row_names = TRUE,
+          show_pct = TRUE,
+          col = col_HLA, 
+          column_order = meta_shh$PID,
+          row_title_gp = gpar(fontsize=8,fontface="bold"),
+          heatmap_legend_param=heatmap_legend_param,
+          column_title = column_title_ICGC,
+          top_annotation = HeatmapAnnotation(Subtype=meta_shh$SUBGROUP,
+                                             Age=meta_shh$AGE,
+                                             Gender=meta_shh$GENDER,
+                                             Vital_Status=meta_shh$Donor_vital_status,
+                                      Overall_Survival=anno_lines(meta_shh$Donor_survival_time,gp=gpar(frontsize=8)),
+                                               which = "col",
+                                            col=list(Age=col_age,Subtype=c("SHH"="red"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+)
+hm_shh_rec
+pdf("fig4b_p.pdf",width = 12,height = 6)
+draw(hm_shh_rec,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+dev.off()
+
+```
+
+### rec antigen enrichment
+```{r}
+gostres_all <- gost(query =rownames(Grp3_rec),organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+publish_gostplot(p,highlight_terms = c("GO:0042826","KEGG:05168"))+ggtitle("Group 3 Recurrent Antigen Pathway")
+p$data %>% knitr::kable()
+
+gostres_all <- gost(query =rownames(Grp4_rec),organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+publish_gostplot(p,highlight_terms = c("KEGG:05168"))+ggtitle("Group 4 Recurrent Antigen Pathway")
+p$data %>% knitr::kable()
+gostres_all <- gost(query =rownames(wnt_rec),organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+publish_gostplot(p,highlight_terms = c("WP:WP2064"))+ggtitle("WNT Recurrent Antigen Pathway")
+p$data %>% knitr::kable()
+gostres_all <- gost(query =rownames(shh_rec),organism=("hsapiens"),significant = TRUE,exclude_iea = TRUE,evcodes = TRUE)
+p <- gostplot(gostres_all,capped = FALSE,interactive = F)
+publish_gostplot(p,highlight_terms = c("KEGG:05230"))+ggtitle("SHH Recurrent Antigen Pathway")
+p$data %>% knitr::kable()
 ```
 
 
 
 
+### rec antigen across group only 
+```{r fig.height=8,fig.width=18}
+#rec neo >= 2
+
+
+mb_rec_taa_mat <- mb_fetal_testis_normal_post %>% rownames_to_column(var="transcript_id") %>% left_join(TAA %>% dplyr::select(transcript_id,gene_name)) %>% filter(gene_name %in% (c(wnt_out_rec_taa,shh_out_rec_taa,grp3_out_rec_taa,grp4_out_rec_taa) %>% unique())) %>% dplyr::select(-transcript_id)
+
+
+mb_rec_taa_mat$gene_name <- make.names(mb_rec_taa_mat$gene_name,unique = T)
+
+mb_rec_taa_mat <- mb_rec_taa_mat %>% column_to_rownames(var="gene_name")
+#rec TAA of all TAA
+
+
+hm_rec_taa=Heatmap(as.matrix(mb_rec_taa_mat),
+               use_raster = T,raster_device = "tiff",
+                #use_raster = F,
+               col = f1,
+               #row_split = split,
+               row_dend_reorder = TRUE,
+               cluster_columns = F,
+               cluster_rows = T,
+               show_row_names = T,
+               row_names_gp = gpar(fontsize=4,fontface="bold"),
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB TAA",
+               column_title_gp = gpar(fontsize=12,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=9,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              #left_annotation = left_annotation,
+               top_annotation = HeatmapAnnotation(Group=col_name_complex$Group,
+                                                   which = "col",                                                 col=list(Age=col_age,Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green","Fetal Cerebellum"="orange","Testis"="gray","Normal"="black"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green")),                                           annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+
+hm_rec_taa
+pdf("fig5d_p.pdf",width = 16,height = 8)
+draw(hm_rec_taa,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+dev.off()
+write.table(mb_rec_taa_mat %>% rownames(),file = "rec_taa.txt",quote = F,sep = ",")
+```
+
+### rec antigen across group only (excluding within group)
+```{r fig.height=8,fig.width=18}
+
+
+setdiff(c(wnt_out_rec_taa,shh_out_rec_taa,grp3_out_rec_taa,grp4_out_rec_taa),c(wnt_in_rec_taa,shh_in_rec_taa,grp3_in_rec_taa,grp4_in_rec_taa))
+
+
+#rec neo >= 2
+
+
+mb_rec_taa_mat <- mb_fetal_testis_normal_post %>% rownames_to_column(var="transcript_id") %>% left_join(TAA %>% dplyr::select(transcript_id,gene_name)) %>% filter(gene_name %in% (setdiff(c(wnt_out_rec_taa,shh_out_rec_taa,grp3_out_rec_taa,grp4_out_rec_taa),c(wnt_in_rec_taa,shh_in_rec_taa,grp3_in_rec_taa,grp4_in_rec_taa)) %>% unique())) %>% dplyr::select(-transcript_id)
+
+
+mb_rec_taa_mat$gene_name <- make.names(mb_rec_taa_mat$gene_name,unique = T)
+
+mb_rec_taa_mat <- mb_rec_taa_mat %>% column_to_rownames(var="gene_name")
+#rec TAA of all TAA
+
+
+hm_rec_taa=Heatmap(as.matrix(mb_rec_taa_mat),
+               # use_raster = T,raster_device = "tiff",
+               col = f1,
+               #row_split = split,
+               row_dend_reorder = TRUE,
+               cluster_columns = F,
+               cluster_rows = T,
+               show_row_names = T,
+               row_names_gp = gpar(fontsize=6),
+               show_column_names = F,
+               name="Gene Expression",
+               column_title = "ICGC MB TAA",
+               column_title_gp = gpar(fontsize=12,fontface="bold"),
+               row_title = "TPM",
+               row_title_gp = gpar(fontsize=9,fontface="bold"),
+               border=T,
+               clustering_distance_rows = "euclidean",
+               clustering_method_rows = "complete",
+               heatmap_legend_param = list(
+                 title = "TPM",
+                 title_position = "lefttop-rot",labels_gp=gpar(fontsize=12),title_gp=gpar(fontsize=12)),
+              #left_annotation = left_annotation,
+               top_annotation = HeatmapAnnotation(Group=col_name_complex$Group,
+                                                   which = "col",                                                 col=list(Age=col_age,Group=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green","Fetal Cerebellum"="orange","Testis"="gray","Normal"="black"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green")),                                           annotation_name_offset=unit(0.5,"mm"),show_annotation_name = T))
+
+hm_rec_taa
+
+draw(hm_rec_taa,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T,newpage=FALSE)
+
+write.table(mb_rec_taa_mat %>% rownames(),file = "rec_taa.txt",quote = F,sep = ",")
+```
+
+## Neo out groups oncoprint 
+```{r fig.height=8,fig.width=18}
+col_HLA = c("HLA_I_SNV" = "blue", "HLA_I_Indel" = "orange", "HLA_II_SNV" = "red","HLA_II_Indel"="green")
+
+alter_fun = list(
+  background = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(4, "pt"), h-unit(2, "pt"), 
+              gp = gpar(fill = "#CCCCCC", col = NA))
+  },
+  # big blue
+  HLA_I_SNV = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(4, "pt"), h-unit(2, "pt"), 
+              gp = gpar(fill = col_HLA["HLA_I_SNV"], col = NA))
+  },
+  # big red
+  HLA_I_Indel = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(4, "pt"), h-unit(2, "pt"), 
+              gp = gpar(fill = col_HLA["HLA_I_Indel"], col = NA))
+  },
+  # small orange
+  HLA_II_SNV = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(2, "pt"), h*0.33, 
+              gp = gpar(fill = col_HLA["HLA_II_SNV"], col = NA))
+  },
+  #small green
+  HLA_II_Indel = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(4, "pt"), h*0.33, 
+              gp = gpar(fill = col_HLA["HLA_II_Indel"], col = NA))
+  }
+)
+
+col_age <- colorRamp2(c(0,80),c("white","brown"))
+column_title_ICGC = "ICGC Medulloblastoma Neoantigens (n=170)"
+
+heatmap_legend_param = list(title = "Alterations", at = c("HLA_I_SNV","HLA_I_Indel","HLA_II_SNV","HLA_II_Indel"), 
+                            labels = c("HLA_I_SNV","HLA_I_Indel","HLA_II_SNV","HLA_II_Indel"))
+
+setdiff(c(wnt_out_rec_neo,shh_out_rec_neo,grp3_out_rec_neo,grp4_out_rec_neo),c(wnt_in_rec_neo,shh_in_rec_neo,grp3_in_rec_neo,grp4_in_rec_neo))
+
+
+
+meta_neo <- meta[meta$PID %in% colnames(MB_ICGC),]
+MB_ICGC_freq_2 <-MB_ICGC[rownames(MB_ICGC) %in% (c(wnt_out_rec_neo,shh_out_rec_neo,grp3_out_rec_neo,grp4_out_rec_neo) %>% unique()),]
+MB_ICGC_freq_2 <- MB_ICGC_freq_2 %>% dplyr::select(meta_neo$PID)
+
+ICGC_all_2 <- oncoPrint(MB_ICGC_freq_2,
+          alter_fun = alter_fun, 
+          col = col_HLA, 
+          column_order = meta_neo$PID,
+          heatmap_legend_param=heatmap_legend_param,
+          column_title = column_title_ICGC,
+          top_annotation = HeatmapAnnotation(Subtype=meta_neo$SUBGROUP,
+                                             Age=meta_neo$AGE,
+                                             Gender=meta_neo$GENDER,
+                                             Vital_Status=meta_neo$Donor_vital_status,
+                                          Overall_Survival=anno_lines(meta_neo$Donor_survival_time,gp=gpar(frontsize=8)),
+                                               which = "col",
+                                             col=list(Age=col_age,Subtype=c("WNT"="blue","SHH"="red","Group 3"="yellow","Group 4"="green"),Gender=c("Female"="red","Male"="blue","Tuner"="brown","Klinefelter"="green"),Vital_Status=c("Alive"="red","Deceased"="blue"))),
+)
+ICGC_all_2
+pdf("fig5c_p.pdf",width = 9,height = 4)
+draw(ICGC_all_2,annotation_legend_side="right",heatmap_legend_side="right",merge_legend=T)
+dev.off()
+```
+### MB in group rec count
+```{r}
+
+mb_rec_table <- rbind(wnt_rec_table,shh_rec_table,Grp3_rec_table,Grp4_rec_table) %>% left_join(meta) %>% dplyr::select(SUBGROUP,ICGC_alt,N)
+
+names(mb_rec_table) <- c("SUBGROUP","Recurring Antigen","Count")
+mb_rec_table$`Recurring Antigen` <- factor(mb_rec_table$`Recurring Antigen`,levels = c("Mutation","Fusion","TAA"))
+mb_rec_table$SUBGROUP <- factor(mb_rec_table$SUBGROUP,levels = col_order )
+p_mb_rec_table <- ggplot(mb_rec_table,aes(x=SUBGROUP,y=Count,fill=`Recurring Antigen`))+geom_boxplot()
+
+p_mb_rec_table+scale_y_log10(oob=scales::squish_infinite)
+
+
+mb_rec_table_stat <- mb_rec_table %>% group_by(`Recurring Antigen`) %>% wilcox_test(Count~SUBGROUP,p.adjust.method = "BH",ref.group = "Group 3")%>% add_xy_position() 
+
+
+```
+## export stats
+```{r}
+write.table(fig1a_stat,"pre_neoantigen_stats.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+write.table(fig2a_stat,"post_neoantigen_MHC_I_stats.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+write.table(fig2c_stat,"post_neoantigen_MHC_II_stats.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+write.table(fig4a_stat,"pre_TAA_stats.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+write.table(fig4b_stat,"post_TAA_MHC_I_II_stats.txt",sep = "\t",quote = F,col.names = T,row.names = F)
+```
+
+```{r}
+vcf <- fread("/blue/mitchell/changlin/MB_immune/Neoantigen/results/ICGC_Nov2019_hg38_vcf/ICGC_hg38_MB.vcf")
+```
 
